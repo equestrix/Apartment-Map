@@ -35,7 +35,7 @@
   <div id="toolbar">
     <div><strong>GTA V Real Estate</strong></div>
 
-    <!-- these controls show only when unlocked -->
+    <!-- Hidden until unlocked -->
     <label id="addWrap" style="display:none"><input type="checkbox" id="addMode"> Add marker</label>
     <label id="editWrap" style="display:none"><input type="checkbox" id="editMode"> Edit mode</label>
 
@@ -49,7 +49,7 @@
   <div id="status">Looking for <code>map.jpg</code>, <code>map.jpeg</code>, or <code>map.png</code> in this folder…</div>
   <div id="map"></div>
 
-  <!-- Inline fallback markers so file:// works if no saved data exists -->
+  <!-- Inline fallback so file:// works; safe to leave or empty it -->
   <script id="markers" type="application/json">
   [
     {
@@ -64,12 +64,10 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script>
-    // ========== CONFIG ==========
-    const EDIT_PASSWORD = "D88";     // <-- change this!
-    const LS_KEY = "gta_map_markers_autosave_v1"; // localStorage key
-    const MAP_CANDIDATES = ["map.jpg","map.jpeg","map.png"];
+    // ===== CONFIG (set your password here) =====
+    const EDIT_PASSWORD = "change-me"; // <-- replace this
 
-    // ========== DOM ==========
+    // ===== DOM refs =====
     const addModeEl  = document.getElementById("addMode");
     const editModeEl = document.getElementById("editMode");
     const addWrap    = document.getElementById("addWrap");
@@ -81,15 +79,16 @@
     const statusEl   = document.getElementById("status");
     const mapEl      = document.getElementById("map");
 
-    // ========== STATE ==========
-    let markersData = [];  // {name, x, y, shabby, nice, _marker}
-    let map, layerGroup;
-    let currentIconSize = 32;
+    // ===== State =====
+    const MAP_CANDIDATES = ["map.jpg","map.jpeg","map.png"];
+    const LS_KEY = "gta_map_markers_autosave_v1";
     let unlocked = false;
+    let map, layerGroup;
+    let markersData = []; // {name,x,y,shabby,nice,_marker}
+    let currentIconSize = 32;
 
-    // ========== UTIL ==========
+    // ===== Utils =====
     function toast(msg){ hintEl.textContent = msg; }
-
     function houseIcon(size = currentIconSize){
       return L.icon({
         iconUrl: "house.png",
@@ -98,16 +97,12 @@
         tooltipAnchor: [0, -size/2]
       });
     }
-
-    // Auto-save to browser after every change
     function saveToBrowser(){
       const clean = markersData.map(({name,x,y,shabby,nice}) => ({name,x,y,shabby,nice}));
       try { localStorage.setItem(LS_KEY, JSON.stringify(clean)); } catch {}
     }
-
-    // Load order: browser autosave -> hosted markers.json -> inline
     async function loadMarkersSmart(){
-      // 1) browser autosave
+      // 1) local autosave
       try {
         const raw = localStorage.getItem(LS_KEY);
         if (raw) {
@@ -115,22 +110,19 @@
           if (Array.isArray(data) && data.length) return data;
         }
       } catch {}
-
-      // 2) hosted markers.json (works on GitHub Pages/Netlify/etc.)
+      // 2) hosted file
       try {
-        const res = await fetch("markers.json", {cache: "no-store"});
+        const res = await fetch("markers.json", {cache:"no-store"});
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data) && data.length) return data;
+          if (Array.isArray(data)) return data;
         }
       } catch {}
-
       // 3) inline fallback
       try {
         const txt = document.getElementById("markers")?.textContent?.trim();
         if (txt) return JSON.parse(txt);
       } catch {}
-
       return [];
     }
 
@@ -140,9 +132,9 @@
           <div style="display:flex;align-items:center;gap:8px;">
             <h3 style="margin:0">${entry.name || "Property"}</h3>
             ${ (unlocked && editModeEl.checked)
-                ? '<button class="btn" data-action="edit" style="padding:4px 8px;border-radius:6px;border:none;cursor:pointer;background:#eee">Edit</button>\
-                   <button class="btn" data-action="delete" style="padding:4px 8px;border-radius:6px;border:none;cursor:pointer;background:#eee">Delete</button>'
-                : '' }
+              ? '<button class="btn" data-action="edit" style="padding:4px 8px;border-radius:6px;border:none;cursor:pointer;background:#eee">Edit</button>\
+                 <button class="btn" data-action="delete" style="padding:4px 8px;border-radius:6px;border:none;cursor:pointer;background:#eee">Delete</button>'
+              : '' }
           </div>
           ${entry.shabby ? `<p><a href="${entry.shabby}" target="_blank" rel="noopener">Shabby Apartment</a></p>` : ""}
           ${entry.nice ? `<p><a href="${entry.nice}" target="_blank" rel="noopener">Nice Apartment</a></p>` : ""}
@@ -150,38 +142,32 @@
         </div>`;
       entry._marker.bindPopup(html);
 
-      // Wire popup actions on open
       entry._marker.off('popupopen').on('popupopen', (e) => {
         if (!(unlocked && editModeEl.checked)) return;
-        const el = e.popup.getElement();
-        if (!el) return;
+        const el = e.popup.getElement(); if (!el) return;
         const editBtn = el.querySelector('[data-action="edit"]');
         const delBtn  = el.querySelector('[data-action="delete"]');
 
-        if (editBtn) {
-          editBtn.addEventListener('click', () => {
-            const newName   = prompt("Property name:", entry.name || "") ?? entry.name;
-            if (newName !== null) entry.name = newName;
-            const newShabby = prompt("Shabby Apartment link (optional):", entry.shabby || "") ?? entry.shabby;
-            if (newShabby !== null) entry.shabby = newShabby;
-            const newNice   = prompt("Nice Apartment link (optional):", entry.nice || "") ?? entry.nice;
-            if (newNice !== null) entry.nice = newNice;
+        if (editBtn) editBtn.addEventListener('click', () => {
+          const newName   = prompt("Property name:", entry.name || "") ?? entry.name;
+          if (newName !== null) entry.name = newName;
+          const newShabby = prompt("Shabby Apartment link (optional):", entry.shabby || "") ?? entry.shabby;
+          if (newShabby !== null) entry.shabby = newShabby;
+          const newNice   = prompt("Nice Apartment link (optional):", entry.nice || "") ?? entry.nice;
+          if (newNice !== null) entry.nice = newNice;
+          entry._marker.setTooltipContent(entry.name || "Property");
+          setMarkerPopup(entry);
+          entry._marker.openPopup();
+          saveToBrowser();
+        });
 
-            entry._marker.setTooltipContent(entry.name || "Property");
-            setMarkerPopup(entry);
-            entry._marker.openPopup();
-            saveToBrowser(); // autosave on edit
-          });
-        }
-        if (delBtn) {
-          delBtn.addEventListener('click', () => {
-            if (!confirm("Delete this marker?")) return;
-            layerGroup.removeLayer(entry._marker);
-            const idx = markersData.indexOf(entry);
-            if (idx >= 0) markersData.splice(idx, 1);
-            saveToBrowser(); // autosave on delete
-          });
-        }
+        if (delBtn) delBtn.addEventListener('click', () => {
+          if (!confirm("Delete this marker?")) return;
+          layerGroup.removeLayer(entry._marker);
+          const idx = markersData.indexOf(entry);
+          if (idx >= 0) markersData.splice(idx, 1);
+          saveToBrowser();
+        });
       });
     }
 
@@ -200,7 +186,7 @@
         const pos = e.target.getLatLng();
         entry.y = pos.lat; entry.x = pos.lng;
         setMarkerPopup(entry);
-        saveToBrowser(); // autosave on drag
+        saveToBrowser();
       });
     }
 
@@ -208,36 +194,26 @@
       const canEdit = unlocked && editModeEl.checked;
       markersData.forEach(e => {
         if (e._marker) {
-          if (canEdit) e._marker.dragging.enable();
-          else e._marker.dragging.disable();
-          setMarkerPopup(e); // re-render with/without buttons
+          if (canEdit) e._marker.dragging.enable(); else e._marker.dragging.disable();
+          setMarkerPopup(e);
         }
       });
-      toast(canEdit
-        ? "Edit mode ON: drag markers, click marker → Edit/Delete."
-        : (unlocked ? "Edit mode OFF." : "Locked (view-only).")
-      );
+      toast(canEdit ? "Edit mode ON" : (unlocked ? "Edit mode OFF" : "Locked (view-only)"));
     }
 
-    // Lock/unlock UI
     function setLockedUI(lock){
       unlocked = !lock;
-      unlockBtn.style.display = lock ? "" : "none";
-      lockBtn.style.display   = lock ? "none" : "";
+      document.getElementById("unlockBtn").style.display = lock ? "" : "none";
+      document.getElementById("lockBtn").style.display   = lock ? "none" : "";
 
       addWrap.style.display   = lock ? "none" : "";
       editWrap.style.display  = lock ? "none" : "";
       exportBtn.style.display = lock ? "none" : "";
 
-      if (lock) {
-        editModeEl.checked = false;
-        applyEditMode();
-      } else {
-        applyEditMode();
-      }
+      if (lock) { editModeEl.checked = false; }
+      applyEditMode();
     }
 
-    // Map boot
     function tryLoadImage(i=0){
       if(i >= MAP_CANDIDATES.length){
         statusEl.innerHTML = 'Could not find a map image. Put it next to <code>index.html</code> and name it <code>map.jpg</code>, <code>map.jpeg</code>, or <code>map.png</code>.';
@@ -265,25 +241,20 @@
       map.on("zoomend", () => {
         const z = map.getZoom();
         currentIconSize = Math.max(16, Math.min(48, z * 4));
-        markersData.forEach(entry => {
-          if (entry._marker) entry._marker.setIcon(houseIcon());
-        });
+        markersData.forEach(entry => { if (entry._marker) entry._marker.setIcon(houseIcon()); });
       });
 
-      // Load markers (browser -> server file -> inline), then render
+      // Load & render markers
       (async () => {
-        const data = await loadMarkersSmart();
-        markersData = data;
+        markersData = await loadMarkersSmart();
         markersData.forEach(createMarker);
-        // kick an initial icon-size sync
-        map.fire("zoomend");
+        map.fire("zoomend"); // initial size sync
       })();
 
-      // Add marker flow (password-gated)
+      // Add marker (only when unlocked + add mode)
       map.on("click", (e) => {
-        if (!unlocked || !addModeEl.checked) return;
+        if (!(unlocked && addModeEl.checked)) return;
         const {lat, lng} = e.latlng;
-        hintEl.textContent = `Clicked: x=${lng.toFixed(1)} y=${lat.toFixed(1)}`;
         const name   = prompt("Property name?");
         if (name === null) return;
         const shabby = prompt("Paste link for Shabby Apartment (optional):") || "";
@@ -291,19 +262,16 @@
         const entry  = { name, x: lng, y: lat, shabby, nice };
         markersData.push(entry);
         createMarker(entry);
-        saveToBrowser(); // autosave on add
+        saveToBrowser();
       });
 
-      // Export backup file (visible only when unlocked)
+      // Export backup
       exportBtn.addEventListener("click", () => {
         const clean = markersData.map(({name,x,y,shabby,nice}) => ({name,x,y,shabby,nice}));
         const blob = new Blob([JSON.stringify(clean, null, 2)], {type: "application/json"});
         const url = URL.createObjectURL(blob);
         const a = Object.assign(document.createElement("a"), { href: url, download: "markers.json" });
-        document.body.appendChild(a);
-        a.click();
-        URL.revokeObjectURL(url);
-        a.remove();
+        document.body.appendChild(a); a.click(); URL.revokeObjectURL(url); a.remove();
         toast("Exported markers.json");
       });
 
@@ -312,25 +280,17 @@
 
       unlockBtn.addEventListener("click", () => {
         const p = prompt("Enter password:");
-        if (p === EDIT_PASSWORD) {
-          setLockedUI(false);
-          toast("Edit unlocked.");
-        } else {
-          toast("Wrong password.");
-        }
+        if (p === EDIT_PASSWORD) { setLockedUI(false); toast("Edit unlocked."); }
+        else { toast("Wrong password."); }
       });
 
-      lockBtn.addEventListener("click", () => {
-        setLockedUI(true);
-        toast("Locked (view-only).");
-      });
+      lockBtn.addEventListener("click", () => { setLockedUI(true); toast("Locked (view-only)."); });
 
       editModeEl.addEventListener("change", applyEditMode);
     }
 
-    // Boot
+    // boot
     tryLoadImage();
   </script>
 </body>
 </html>
-
