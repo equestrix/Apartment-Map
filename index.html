@@ -10,7 +10,7 @@
     #map { position: absolute; inset: 56px 0 0 0; display:none; }
     #toolbar {
       position: fixed; inset: 0 0 auto 0; height: 56px;
-      display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+      display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
       padding: 8px 12px; background: rgba(30,30,30,0.92); color: #fff;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       z-index: 1000; backdrop-filter: blur(6px);
@@ -21,7 +21,7 @@
       border: none; padding: 8px 12px; border-radius: 8px; cursor: pointer;
       background: #ffffff; color: #111; font-weight: 700;
     }
-    #toolbar button:hover { filter: brightness(0.9); }
+    #toolbar button:hover { filter: brightness(0.95); }
     #hint { opacity: 0.9; }
     .leaflet-tooltip { background: #111; color: #fff; border: 0; border-radius: 6px; }
     .popup h3 { margin: 0 8px 6px 0; font-size: 16px; display:inline-block; }
@@ -34,15 +34,22 @@
 <body>
   <div id="toolbar">
     <div><strong>GTA V Real Estate</strong></div>
-    <label><input type="checkbox" id="addMode"> Add marker</label>
-    <label><input type="checkbox" id="editMode"> Edit mode</label>
-    <button id="exportBtn" title="Download markers.json">Export</button>
+
+    <!-- these controls show only when unlocked -->
+    <label id="addWrap" style="display:none"><input type="checkbox" id="addMode"> Add marker</label>
+    <label id="editWrap" style="display:none"><input type="checkbox" id="editMode"> Edit mode</label>
+
+    <button id="unlockBtn">Unlock</button>
+    <button id="lockBtn" style="display:none">Lock</button>
+
+    <button id="exportBtn" style="display:none" title="Download markers.json">Export</button>
     <span id="hint">Loading map image…</span>
   </div>
+
   <div id="status">Looking for <code>map.jpg</code>, <code>map.jpeg</code>, or <code>map.png</code> in this folder…</div>
   <div id="map"></div>
 
-  <!-- Inline markers so file:// works. Edit these or leave empty [] -->
+  <!-- Inline fallback markers so file:// works if no saved data exists -->
   <script id="markers" type="application/json">
   [
     {
@@ -57,31 +64,33 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script>
-    const addModeEl = document.getElementById("addMode");
+    // ========== CONFIG ==========
+    const EDIT_PASSWORD = "change-me";     // <-- change this!
+    const LS_KEY = "gta_map_markers_autosave_v1"; // localStorage key
+    const MAP_CANDIDATES = ["map.jpg","map.jpeg","map.png"];
+
+    // ========== DOM ==========
+    const addModeEl  = document.getElementById("addMode");
     const editModeEl = document.getElementById("editMode");
-    const hintEl = document.getElementById("hint");
-    const statusEl = document.getElementById("status");
-    const mapEl = document.getElementById("map");
+    const addWrap    = document.getElementById("addWrap");
+    const editWrap   = document.getElementById("editWrap");
+    const exportBtn  = document.getElementById("exportBtn");
+    const unlockBtn  = document.getElementById("unlockBtn");
+    const lockBtn    = document.getElementById("lockBtn");
+    const hintEl     = document.getElementById("hint");
+    const statusEl   = document.getElementById("status");
+    const mapEl      = document.getElementById("map");
 
-    const candidates = ["map.jpg","map.jpeg","map.png"];
-
-    let markersData = []; // {name, x, y, shabby, nice, _marker}
+    // ========== STATE ==========
+    let markersData = [];  // {name, x, y, shabby, nice, _marker}
     let map, layerGroup;
+    let currentIconSize = 32;
+    let unlocked = false;
 
-    // Try to locate the map image and auto-detect its size
-    function tryLoadImage(i=0){
-      if(i >= candidates.length){
-        statusEl.innerHTML = 'Could not find a map image. Put it next to <code>index.html</code> and name it <code>map.jpg</code>, <code>map.jpeg</code>, or <code>map.png</code>.';
-        return;
-      }
-      const src = candidates[i] + "?v=" + Date.now();
-      const test = new Image();
-      test.onload = () => init(src, test.naturalWidth, test.naturalHeight);
-      test.onerror = () => tryLoadImage(i+1);
-      test.src = src;
-    }
+    // ========== UTIL ==========
+    function toast(msg){ hintEl.textContent = msg; }
 
-    function houseIcon(size=32){
+    function houseIcon(size = currentIconSize){
       return L.icon({
         iconUrl: "house.png",
         iconSize: [size, size],
@@ -90,12 +99,47 @@
       });
     }
 
+    // Auto-save to browser after every change
+    function saveToBrowser(){
+      const clean = markersData.map(({name,x,y,shabby,nice}) => ({name,x,y,shabby,nice}));
+      try { localStorage.setItem(LS_KEY, JSON.stringify(clean)); } catch {}
+    }
+
+    // Load order: browser autosave -> hosted markers.json -> inline
+    async function loadMarkersSmart(){
+      // 1) browser autosave
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (raw) {
+          const data = JSON.parse(raw);
+          if (Array.isArray(data) && data.length) return data;
+        }
+      } catch {}
+
+      // 2) hosted markers.json (works on GitHub Pages/Netlify/etc.)
+      try {
+        const res = await fetch("markers.json", {cache: "no-store"});
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length) return data;
+        }
+      } catch {}
+
+      // 3) inline fallback
+      try {
+        const txt = document.getElementById("markers")?.textContent?.trim();
+        if (txt) return JSON.parse(txt);
+      } catch {}
+
+      return [];
+    }
+
     function setMarkerPopup(entry){
       const html = `
         <div class="popup">
           <div style="display:flex;align-items:center;gap:8px;">
             <h3 style="margin:0">${entry.name || "Property"}</h3>
-            ${ editModeEl.checked
+            ${ (unlocked && editModeEl.checked)
                 ? '<button class="btn" data-action="edit" style="padding:4px 8px;border-radius:6px;border:none;cursor:pointer;background:#eee">Edit</button>\
                    <button class="btn" data-action="delete" style="padding:4px 8px;border-radius:6px;border:none;cursor:pointer;background:#eee">Delete</button>'
                 : '' }
@@ -106,12 +150,14 @@
         </div>`;
       entry._marker.bindPopup(html);
 
-      // Wire popup buttons every time it opens
+      // Wire popup actions on open
       entry._marker.off('popupopen').on('popupopen', (e) => {
+        if (!(unlocked && editModeEl.checked)) return;
         const el = e.popup.getElement();
         if (!el) return;
         const editBtn = el.querySelector('[data-action="edit"]');
         const delBtn  = el.querySelector('[data-action="delete"]');
+
         if (editBtn) {
           editBtn.addEventListener('click', () => {
             const newName   = prompt("Property name:", entry.name || "") ?? entry.name;
@@ -120,9 +166,11 @@
             if (newShabby !== null) entry.shabby = newShabby;
             const newNice   = prompt("Nice Apartment link (optional):", entry.nice || "") ?? entry.nice;
             if (newNice !== null) entry.nice = newNice;
+
             entry._marker.setTooltipContent(entry.name || "Property");
             setMarkerPopup(entry);
             entry._marker.openPopup();
+            saveToBrowser(); // autosave on edit
           });
         }
         if (delBtn) {
@@ -131,45 +179,75 @@
             layerGroup.removeLayer(entry._marker);
             const idx = markersData.indexOf(entry);
             if (idx >= 0) markersData.splice(idx, 1);
+            saveToBrowser(); // autosave on delete
           });
         }
       });
     }
 
     function createMarker(entry){
-      entry._marker = L.marker([entry.y, entry.x], { draggable: !!editModeEl.checked, autoPan: true, icon: houseIcon(currentIconSize) })
-        .addTo(layerGroup)
-        .bindTooltip(entry.name || "Property", {direction: "top", offset: [0,-10]});
+      entry._marker = L.marker([entry.y, entry.x], {
+        draggable: !!(unlocked && editModeEl.checked),
+        autoPan: true,
+        icon: houseIcon()
+      })
+      .addTo(layerGroup)
+      .bindTooltip(entry.name || "Property", {direction: "top", offset: [0,-10]});
+
       setMarkerPopup(entry);
+
       entry._marker.on('dragend', (e) => {
         const pos = e.target.getLatLng();
         entry.y = pos.lat; entry.x = pos.lng;
         setMarkerPopup(entry);
+        saveToBrowser(); // autosave on drag
       });
     }
 
-    function loadMarkersInline(){
-      try {
-        const txt = document.getElementById("markers")?.textContent?.trim();
-        if (!txt) return [];
-        return JSON.parse(txt);
-      } catch {
-        return [];
+    function applyEditMode(){
+      const canEdit = unlocked && editModeEl.checked;
+      markersData.forEach(e => {
+        if (e._marker) {
+          if (canEdit) e._marker.dragging.enable();
+          else e._marker.dragging.disable();
+          setMarkerPopup(e); // re-render with/without buttons
+        }
+      });
+      toast(canEdit
+        ? "Edit mode ON: drag markers, click marker → Edit/Delete."
+        : (unlocked ? "Edit mode OFF." : "Locked (view-only).")
+      );
+    }
+
+    // Lock/unlock UI
+    function setLockedUI(lock){
+      unlocked = !lock;
+      unlockBtn.style.display = lock ? "" : "none";
+      lockBtn.style.display   = lock ? "none" : "";
+
+      addWrap.style.display   = lock ? "none" : "";
+      editWrap.style.display  = lock ? "none" : "";
+      exportBtn.style.display = lock ? "none" : "";
+
+      if (lock) {
+        editModeEl.checked = false;
+        applyEditMode();
+      } else {
+        applyEditMode();
       }
     }
 
-    let currentIconSize = 32; // will be adjusted on zoom
-    function applyEditMode(){
-      const isEdit = editModeEl.checked;
-      markersData.forEach(e => {
-        if(e._marker){
-          e._marker.dragging[isEdit ? 'enable' : 'disable']();
-          setMarkerPopup(e); // re-render popup with/without buttons
-        }
-      });
-      hintEl.textContent = isEdit
-        ? "Edit mode ON: drag markers, click a marker → Edit/Delete."
-        : "Edit mode OFF.";
+    // Map boot
+    function tryLoadImage(i=0){
+      if(i >= MAP_CANDIDATES.length){
+        statusEl.innerHTML = 'Could not find a map image. Put it next to <code>index.html</code> and name it <code>map.jpg</code>, <code>map.jpeg</code>, or <code>map.png</code>.';
+        return;
+      }
+      const src = MAP_CANDIDATES[i] + "?v=" + Date.now();
+      const test = new Image();
+      test.onload = () => init(src, test.naturalWidth, test.naturalHeight);
+      test.onerror = () => tryLoadImage(i+1);
+      test.src = src;
     }
 
     function init(imageUrl, w, h){
@@ -183,28 +261,29 @@
 
       layerGroup = L.layerGroup().addTo(map);
 
-      // Make icons scale with zoom (min 16px, max 48px)
+      // Scale icons with zoom (min 16, max 48)
       map.on("zoomend", () => {
-        const zoom = map.getZoom();
-        currentIconSize = Math.max(16, Math.min(48, zoom * 4));
+        const z = map.getZoom();
+        currentIconSize = Math.max(16, Math.min(48, z * 4));
         markersData.forEach(entry => {
-          if (entry._marker) {
-            entry._marker.setIcon(houseIcon(currentIconSize));
-            entry._marker.setTooltipContent(entry.name || "Property");
-          }
+          if (entry._marker) entry._marker.setIcon(houseIcon());
         });
       });
 
-      // Load markers from inline JSON (works with file://)
-      markersData = loadMarkersInline();
-      markersData.forEach(createMarker);
+      // Load markers (browser -> server file -> inline), then render
+      (async () => {
+        const data = await loadMarkersSmart();
+        markersData = data;
+        markersData.forEach(createMarker);
+        // kick an initial icon-size sync
+        map.fire("zoomend");
+      })();
 
-      // Add marker flow
+      // Add marker flow (password-gated)
       map.on("click", (e) => {
+        if (!unlocked || !addModeEl.checked) return;
         const {lat, lng} = e.latlng;
         hintEl.textContent = `Clicked: x=${lng.toFixed(1)} y=${lat.toFixed(1)}`;
-        if (!addModeEl.checked) return;
-
         const name   = prompt("Property name?");
         if (name === null) return;
         const shabby = prompt("Paste link for Shabby Apartment (optional):") || "";
@@ -212,15 +291,12 @@
         const entry  = { name, x: lng, y: lat, shabby, nice };
         markersData.push(entry);
         createMarker(entry);
+        saveToBrowser(); // autosave on add
       });
 
-      // Toggle Edit Mode (dragging + popup buttons)
-      editModeEl.addEventListener('change', applyEditMode);
-      applyEditMode();
-
-      // Export to markers.json (optional)
-      document.getElementById("exportBtn").addEventListener("click", () => {
-        const clean = markersData.map(({name, x, y, shabby, nice}) => ({name, x, y, shabby, nice}));
+      // Export backup file (visible only when unlocked)
+      exportBtn.addEventListener("click", () => {
+        const clean = markersData.map(({name,x,y,shabby,nice}) => ({name,x,y,shabby,nice}));
         const blob = new Blob([JSON.stringify(clean, null, 2)], {type: "application/json"});
         const url = URL.createObjectURL(blob);
         const a = Object.assign(document.createElement("a"), { href: url, download: "markers.json" });
@@ -228,10 +304,33 @@
         a.click();
         URL.revokeObjectURL(url);
         a.remove();
+        toast("Exported markers.json");
       });
+
+      // Lock/Unlock controls
+      setLockedUI(true); // start locked
+
+      unlockBtn.addEventListener("click", () => {
+        const p = prompt("Enter password:");
+        if (p === EDIT_PASSWORD) {
+          setLockedUI(false);
+          toast("Edit unlocked.");
+        } else {
+          toast("Wrong password.");
+        }
+      });
+
+      lockBtn.addEventListener("click", () => {
+        setLockedUI(true);
+        toast("Locked (view-only).");
+      });
+
+      editModeEl.addEventListener("change", applyEditMode);
     }
 
+    // Boot
     tryLoadImage();
   </script>
 </body>
 </html>
+
