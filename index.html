@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>GTA V Real Estate Map</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #map { position: absolute; inset: 56px 0 0 0; display:none; }
+    #toolbar {
+      position: fixed; inset: 0 0 auto 0; height: 56px;
+      display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+      padding: 8px 12px; background: rgba(30,30,30,0.92); color: #fff;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      z-index: 1000; backdrop-filter: blur(6px);
+    }
+    #toolbar label { display:flex; align-items:center; gap:6px; }
+    #toolbar input[type="checkbox"] { transform: translateY(1px); }
+    #toolbar button {
+      border: none; padding: 8px 12px; border-radius: 8px; cursor: pointer;
+      background: #ffffff; color: #111; font-weight: 700;
+    }
+    #toolbar button:hover { filter: brightness(0.9); }
+    #hint { opacity: 0.9; }
+    .leaflet-tooltip { background: #111; color: #fff; border: 0; border-radius: 6px; }
+    .popup h3 { margin: 0 8px 6px 0; font-size: 16px; display:inline-block; }
+    .popup p { margin: 0 0 8px; }
+    .popup small { color:#666; }
+    #status { position: absolute; inset: 56px 0 0 0; display:grid; place-items:center; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#333; padding: 24px; text-align:center;}
+    #status code { background:#eee; padding:2px 6px; border-radius:4px; }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <div><strong>GTA V Real Estate</strong></div>
+    <label><input type="checkbox" id="addMode"> Add marker</label>
+    <label><input type="checkbox" id="editMode"> Edit mode</label>
+    <button id="exportBtn" title="Download markers.json">Export</button>
+    <span id="hint">Loading map image…</span>
+  </div>
+  <div id="status">Looking for <code>map.jpg</code>, <code>map.jpeg</code>, or <code>map.png</code> in this folder…</div>
+  <div id="map"></div>
+
+  <!-- Inline markers so file:// works. Edit these or leave empty [] -->
+  <script id="markers" type="application/json">
+  [
+    {
+      "name": "Sample Apartment",
+      "x": 1000,
+      "y": 1000,
+      "shabby": "https://imgur.com/a/SHABBYEXAMPLE",
+      "nice": "https://imgur.com/a/NICEEXAMPLE"
+    }
+  ]
+  </script>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script>
+    const addModeEl = document.getElementById("addMode");
+    const editModeEl = document.getElementById("editMode");
+    const hintEl = document.getElementById("hint");
+    const statusEl = document.getElementById("status");
+    const mapEl = document.getElementById("map");
+
+    const candidates = ["map.jpg","map.jpeg","map.png"];
+
+    let markersData = []; // {name, x, y, shabby, nice, _marker}
+    let map, layerGroup;
+
+    // Try to locate the map image and auto-detect its size
+    function tryLoadImage(i=0){
+      if(i >= candidates.length){
+        statusEl.innerHTML = 'Could not find a map image. Put it next to <code>index.html</code> and name it <code>map.jpg</code>, <code>map.jpeg</code>, or <code>map.png</code>.';
+        return;
+      }
+      const src = candidates[i] + "?v=" + Date.now();
+      const test = new Image();
+      test.onload = () => init(src, test.naturalWidth, test.naturalHeight);
+      test.onerror = () => tryLoadImage(i+1);
+      test.src = src;
+    }
+
+    function houseIcon(size=32){
+      return L.icon({
+        iconUrl: "house.png",
+        iconSize: [size, size],
+        iconAnchor: [size/2, size/2],
+        tooltipAnchor: [0, -size/2]
+      });
+    }
+
+    function setMarkerPopup(entry){
+      const html = `
+        <div class="popup">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <h3 style="margin:0">${entry.name || "Property"}</h3>
+            ${ editModeEl.checked
+                ? '<button class="btn" data-action="edit" style="padding:4px 8px;border-radius:6px;border:none;cursor:pointer;background:#eee">Edit</button>\
+                   <button class="btn" data-action="delete" style="padding:4px 8px;border-radius:6px;border:none;cursor:pointer;background:#eee">Delete</button>'
+                : '' }
+          </div>
+          ${entry.shabby ? `<p><a href="${entry.shabby}" target="_blank" rel="noopener">Shabby Apartment</a></p>` : ""}
+          ${entry.nice ? `<p><a href="${entry.nice}" target="_blank" rel="noopener">Nice Apartment</a></p>` : ""}
+          <small>Coords: x=${entry.x.toFixed(1)}, y=${entry.y.toFixed(1)}</small>
+        </div>`;
+      entry._marker.bindPopup(html);
+
+      // Wire popup buttons every time it opens
+      entry._marker.off('popupopen').on('popupopen', (e) => {
+        const el = e.popup.getElement();
+        if (!el) return;
+        const editBtn = el.querySelector('[data-action="edit"]');
+        const delBtn  = el.querySelector('[data-action="delete"]');
+        if (editBtn) {
+          editBtn.addEventListener('click', () => {
+            const newName   = prompt("Property name:", entry.name || "") ?? entry.name;
+            if (newName !== null) entry.name = newName;
+            const newShabby = prompt("Shabby Apartment link (optional):", entry.shabby || "") ?? entry.shabby;
+            if (newShabby !== null) entry.shabby = newShabby;
+            const newNice   = prompt("Nice Apartment link (optional):", entry.nice || "") ?? entry.nice;
+            if (newNice !== null) entry.nice = newNice;
+            entry._marker.setTooltipContent(entry.name || "Property");
+            setMarkerPopup(entry);
+            entry._marker.openPopup();
+          });
+        }
+        if (delBtn) {
+          delBtn.addEventListener('click', () => {
+            if (!confirm("Delete this marker?")) return;
+            layerGroup.removeLayer(entry._marker);
+            const idx = markersData.indexOf(entry);
+            if (idx >= 0) markersData.splice(idx, 1);
+          });
+        }
+      });
+    }
+
+    function createMarker(entry){
+      entry._marker = L.marker([entry.y, entry.x], { draggable: !!editModeEl.checked, autoPan: true, icon: houseIcon(currentIconSize) })
+        .addTo(layerGroup)
+        .bindTooltip(entry.name || "Property", {direction: "top", offset: [0,-10]});
+      setMarkerPopup(entry);
+      entry._marker.on('dragend', (e) => {
+        const pos = e.target.getLatLng();
+        entry.y = pos.lat; entry.x = pos.lng;
+        setMarkerPopup(entry);
+      });
+    }
+
+    function loadMarkersInline(){
+      try {
+        const txt = document.getElementById("markers")?.textContent?.trim();
+        if (!txt) return [];
+        return JSON.parse(txt);
+      } catch {
+        return [];
+      }
+    }
+
+    let currentIconSize = 32; // will be adjusted on zoom
+    function applyEditMode(){
+      const isEdit = editModeEl.checked;
+      markersData.forEach(e => {
+        if(e._marker){
+          e._marker.dragging[isEdit ? 'enable' : 'disable']();
+          setMarkerPopup(e); // re-render popup with/without buttons
+        }
+      });
+      hintEl.textContent = isEdit
+        ? "Edit mode ON: drag markers, click a marker → Edit/Delete."
+        : "Edit mode OFF.";
+    }
+
+    function init(imageUrl, w, h){
+      statusEl.style.display = "none";
+      mapEl.style.display = "block";
+
+      const bounds = [[0,0], [h, w]];
+      map = L.map("map", { crs: L.CRS.Simple, minZoom: -2, maxZoom: 5, zoomControl: true, attributionControl: false });
+      L.imageOverlay(imageUrl, bounds).addTo(map);
+      map.fitBounds(bounds);
+
+      layerGroup = L.layerGroup().addTo(map);
+
+      // Make icons scale with zoom (min 16px, max 48px)
+      map.on("zoomend", () => {
+        const zoom = map.getZoom();
+        currentIconSize = Math.max(16, Math.min(48, zoom * 4));
+        markersData.forEach(entry => {
+          if (entry._marker) {
+            entry._marker.setIcon(houseIcon(currentIconSize));
+            entry._marker.setTooltipContent(entry.name || "Property");
+          }
+        });
+      });
+
+      // Load markers from inline JSON (works with file://)
+      markersData = loadMarkersInline();
+      markersData.forEach(createMarker);
+
+      // Add marker flow
+      map.on("click", (e) => {
+        const {lat, lng} = e.latlng;
+        hintEl.textContent = `Clicked: x=${lng.toFixed(1)} y=${lat.toFixed(1)}`;
+        if (!addModeEl.checked) return;
+
+        const name   = prompt("Property name?");
+        if (name === null) return;
+        const shabby = prompt("Paste link for Shabby Apartment (optional):") || "";
+        const nice   = prompt("Paste link for Nice Apartment (optional):") || "";
+        const entry  = { name, x: lng, y: lat, shabby, nice };
+        markersData.push(entry);
+        createMarker(entry);
+      });
+
+      // Toggle Edit Mode (dragging + popup buttons)
+      editModeEl.addEventListener('change', applyEditMode);
+      applyEditMode();
+
+      // Export to markers.json (optional)
+      document.getElementById("exportBtn").addEventListener("click", () => {
+        const clean = markersData.map(({name, x, y, shabby, nice}) => ({name, x, y, shabby, nice}));
+        const blob = new Blob([JSON.stringify(clean, null, 2)], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = Object.assign(document.createElement("a"), { href: url, download: "markers.json" });
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        a.remove();
+      });
+    }
+
+    tryLoadImage();
+  </script>
+</body>
+</html>
