@@ -254,12 +254,13 @@
         markersData.forEach(entry => { if (entry._marker) entry._marker.setIcon(houseIcon()); });
       });
 
-      // Load & render markers
-      (async () => {
-        markersData = await loadMarkersSmart();
-        markersData.forEach(createMarker);
-        map.fire("zoomend"); // initial size sync
-      })();
+      // Load & render markers (always from GitHub)
+(async () => {
+  markersData = await loadMarkersFromGitHub();
+  markersData.forEach(createMarker);
+  map.fire("zoomend"); // initial size sync
+})();
+
 
       // Add marker (only when unlocked + add mode)
       map.on("click", (e) => {
