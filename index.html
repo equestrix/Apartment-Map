@@ -97,10 +97,29 @@
         tooltipAnchor: [0, -size/2]
       });
     }
+    const SAVE_ENDPOINT = "https://euphonious-speculoos-c7d2c2.netlify.app/.netlify/functions/save";
+    
     function saveToBrowser(){
-      const clean = markersData.map(({name,x,y,shabby,nice}) => ({name,x,y,shabby,nice}));
-      try { localStorage.setItem(LS_KEY, JSON.stringify(clean)); } catch {}
-    }
+  const clean = markersData.map(({name,x,y,shabby,nice}) => ({name,x,y,shabby,nice}));
+
+  // always save locally (so edits survive refresh even if GitHub push fails)
+  try { localStorage.setItem(LS_KEY, JSON.stringify(clean)); } catch {}
+
+  // push to GitHub if unlocked
+  if (unlocked && SAVE_ENDPOINT) {
+    fetch(SAVE_ENDPOINT, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ markers: clean, author: { name: "Agent", email: "agent@example.com" } })
+    })
+    .then(r => r.ok ? toast("Saved to GitHub.") : r.text().then(t => { throw new Error(t) }))
+    .catch(err => {
+      console.warn("GitHub save failed:", err.message);
+      toast("Saved locally. (GitHub save failed)");
+    });
+  }
+}
+
     async function loadMarkersSmart(){
       // 1) local autosave
       try {
