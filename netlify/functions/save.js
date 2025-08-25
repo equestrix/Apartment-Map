@@ -24,7 +24,7 @@ export const handler = async (event) => {
 
     const owner  = process.env.REPO_OWNER;
     const repo   = process.env.REPO_NAME;
-    const branch = process.env.BRANCH || 'main';
+    const branch = process.env.REPO_BRANCH || 'main';
     const path   = process.env.FILE_PATH || 'markers.json';
     const token  = process.env.GITHUB_TOKEN;
 
