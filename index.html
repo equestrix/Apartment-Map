@@ -120,30 +120,21 @@
   }
 }
 
-    async function loadMarkersSmart(){
-      // 1) local autosave
-      try {
-        const raw = localStorage.getItem(LS_KEY);
-        if (raw) {
-          const data = JSON.parse(raw);
-          if (Array.isArray(data) && data.length) return data;
-        }
-      } catch {}
-      // 2) hosted file
-      try {
-        const res = await fetch("markers.json", {cache:"no-store"});
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data)) return data;
-        }
-      } catch {}
-      // 3) inline fallback
-      try {
-        const txt = document.getElementById("markers")?.textContent?.trim();
-        if (txt) return JSON.parse(txt);
-      } catch {}
-      return [];
-    }
+   async function loadMarkersFromGitHub() {
+  try {
+    const res = await fetch(`markers.json?v=${Date.now()}`, { cache: "no-store" });
+    if (!res.ok) throw new Error("markers.json fetch failed");
+    const data = await res.json();
+    if (!Array.isArray(data)) throw new Error("markers.json not an array");
+    return data;
+  } catch (err) {
+    console.warn("GitHub load failed:", err.message);
+    try {
+      const txt = document.getElementById("markers")?.textContent?.trim();
+      return txt ? JSON.parse(txt) : [];
+    } catch { return []; }
+  }
+}
 
     function setMarkerPopup(entry){
       const html = `
