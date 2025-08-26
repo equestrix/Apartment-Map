@@ -1,17 +1,13 @@
 // netlify/functions/save.js
-// Commits markers.json to GitHub. Requires env vars:
-// GITHUB_TOKEN, REPO_OWNER, REPO_NAME, REPO_BRANCH, FILE_PATH, ALLOW_ORIGIN
+// Env: GITHUB_TOKEN, REPO_OWNER, REPO_NAME, REPO_BRANCH, FILE_PATH, ALLOW_ORIGIN
 
 export const handler = async (event) => {
-  const origin = event.headers.origin || "";
-  const allowOrigin = process.env.ALLOW_ORIGIN || "*";
   const cors = {
-    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Origin": process.env.ALLOW_ORIGIN || "*",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 
-  // CORS preflight
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers: cors, body: "" };
   }
@@ -20,9 +16,7 @@ export const handler = async (event) => {
   }
 
   try {
-    const body = JSON.parse(event.body || "{}");
-    const markers = body.markers;
-    const author = body.author || { name: "Map Bot", email: "mapbot@example.com" };
+    const { markers, author = { name: "Map Bot", email: "mapbot@example.com" } } = JSON.parse(event.body || "{}");
     if (!Array.isArray(markers)) {
       return { statusCode: 400, headers: cors, body: "Missing markers array" };
     }
@@ -39,8 +33,8 @@ export const handler = async (event) => {
 
     const apiBase = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeURIComponent(path)}`;
 
-    // 1) get current file sha (if it exists)
-    let sha = undefined;
+    // Get current file sha (if exists)
+    let sha;
     const getRes = await fetch(`${apiBase}?ref=${encodeURIComponent(branch)}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
     });
@@ -52,7 +46,7 @@ export const handler = async (event) => {
       return { statusCode: 500, headers: cors, body: `GitHub GET failed: ${getRes.status} ${txt}` };
     }
 
-    // 2) commit new content
+    // Commit
     const content = Buffer.from(JSON.stringify(markers, null, 2)).toString("base64");
     const message = `Update ${path} (${new Date().toISOString()})`;
 
@@ -66,12 +60,26 @@ export const handler = async (event) => {
       body: JSON.stringify({ message, content, branch, sha, committer: author, author }),
     });
 
+    const payloadText = await putRes.text();
     if (!putRes.ok) {
-      const txt = await putRes.text();
-      return { statusCode: 500, headers: cors, body: `GitHub PUT failed: ${putRes.status} ${txt}` };
+      return { statusCode: 500, headers: cors, body: `GitHub PUT failed: ${putRes.status} ${payloadText}` };
     }
 
-    return { statusCode: 200, headers: cors, body: "Saved to GitHub" };
+    // payload has { content: { path, sha }, commit: { sha } }
+    let payload;
+    try { payload = JSON.parse(payloadText); } catch { payload = { raw: payloadText }; }
+
+    return {
+      statusCode: 200,
+      headers: { ...cors, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ok: true,
+        path: payload?.content?.path || path,
+        content_sha: payload?.content?.sha || null,
+        commit_sha: payload?.commit?.sha || null,
+        branch,
+      }),
+    };
   } catch (e) {
     return { statusCode: 500, headers: cors, body: `Error: ${e.message}` };
   }
