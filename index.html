@@ -224,29 +224,42 @@
 
     // Save helper: local safety + Netlify → GitHub (only when unlocked)
     function saveToGitHubAndLocal(){
-      const clean = markersData.map(({name,x,y,shabby,nice}) => ({name,x,y,shabby,nice}));
-      try { localStorage.setItem(LS_KEY, JSON.stringify(clean)); } catch {}
-      if (!(unlocked && SAVE_ENDPOINT)) {
-        console.log("[save] skipped (locked or no endpoint)");
-        return;
-      }
-      console.log("[save] pushing to GitHub via Netlify…", clean);
-      fetch(SAVE_ENDPOINT, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ markers: clean, author: { name: "Agent", email: "agent@example.com" } })
-      })
-      .then(async (r) => {
-        const txt = await r.text();
-        if (!r.ok) throw new Error(txt || `HTTP ${r.status}`);
-        toast("Saved to GitHub.");
-        console.log("[save] OK:", txt);
-      })
-      .catch(err => {
-        toast("Saved locally. (GitHub save failed)");
-        console.warn("[save] FAIL:", err.message);
-      });
-    }
+  const clean = markersData.map(({name,x,y,shabby,nice}) => ({name,x,y,shabby,nice}));
+  try { localStorage.setItem(LS_KEY, JSON.stringify(clean)); } catch {}
+
+  if (!(unlocked && SAVE_ENDPOINT)) {
+    console.log("[save] skipped (locked or no endpoint)");
+    return;
+  }
+
+  console.log("[save] pushing to GitHub via Netlify…", clean);
+  fetch(SAVE_ENDPOINT, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ markers: clean, author: { name: "Agent", email: "agent@example.com" } })
+  })
+  .then(async (r) => {
+    const txt = await r.text();
+    if (!r.ok) throw new Error(txt || `HTTP ${r.status}`);
+    let info = {};
+    try { info = JSON.parse(txt); } catch {}
+    toast(`Saved to GitHub${info.commit_sha ? " (" + info.commit_sha.slice(0,7) + ")" : ""}.`);
+
+    // Immediately reload markers from GitHub so the UI reflects exactly what's saved
+    return loadMarkersFromGitHub().then((fresh) => {
+      // Replace on-map data
+      markersData.forEach(e => { if (e._marker) layerGroup.removeLayer(e._marker); });
+      markersData = fresh;
+      markersData.forEach(createMarker);
+      map.fire("zoomend");
+      console.log("[save] refreshed from GitHub:", info);
+    });
+  })
+  .catch(err => {
+    toast("Saved locally. (GitHub save failed)");
+    console.warn("[save] FAIL:", err.message);
+  });
+}
 
     function init(imageUrl, w, h){
       statusEl.style.display = "none";
