@@ -5,5 +5,12 @@
     "y": 500,
     "shabby": "https://imgur.com/a/SHABBYEXAMPLE",
     "nice": "https://imgur.com/a/NICEEXAMPLE"
+  },
+  {
+    "name": "Vinewood Test",
+    "x": 959,
+    "y": 621.5,
+    "shabby": "test",
+    "nice": "test"
   }
 ]
