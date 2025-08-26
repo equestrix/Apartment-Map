@@ -287,20 +287,45 @@
         toast("Exported markers.json");
       });
 
-      unlockBtn.addEventListener("click", async () => {
-        try {
-          const email = prompt("Editor email:"); if (!email) return;
-          const pass  = prompt("Editor password:"); if (!pass) return;
-          await signInWithEmailAndPassword(auth, email, pass);
-        } catch (e) {
-          console.warn("Sign-in failed:", e);
-          toast("Wrong credentials or auth error.");
-        }
-      });
-      lockBtn.addEventListener("click", async () => { await signOut(auth); });
+      <script type="module">
+// ... keep your existing imports and firebase init above ...
 
-      editModeEl.addEventListener("change", applyEditMode);
-    }
+// EDIT: hardcode the editor email so you only type the password
+const EDITOR_EMAIL = "editor@dynasty8.com";
+
+unlockBtn.addEventListener("click", async () => {
+  try {
+    const pass = prompt(`Password for ${EDITOR_EMAIL}:`);
+    if (!pass) return;
+    await signInWithEmailAndPassword(auth, EDITOR_EMAIL, pass);
+    // onAuthStateChanged below will flip UI to unlocked
+  } catch (e) {
+    console.error("Sign-in failed:", e);
+    alert("Sign-in failed: " + (e?.message || e));
+  }
+});
+
+lockBtn.addEventListener("click", async () => {
+  try {
+    await signOut(auth);
+  } catch (e) {
+    console.error("Sign-out failed:", e);
+    alert("Sign-out failed: " + (e?.message || e));
+  }
+});
+
+// Show who is signed in & keep UI in sync
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    setLockedUI(false);
+    hintEl.textContent = `Edit unlocked — ${user.email}`;
+  } else {
+    setLockedUI(true);
+    hintEl.textContent = "Locked (view-only)";
+  }
+});
+</script>
+}
 
     try {
       const app = initializeApp(firebaseConfig);
