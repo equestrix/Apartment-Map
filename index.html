@@ -21,7 +21,6 @@
       background: var(--sea) !important;
     }
 
-    /* Optional soft vignette; delete if you want flat blue */
     body::before{
       content:"";
       position: fixed;
@@ -63,7 +62,6 @@
   <div id="toolbar">
     <div><strong>Dynasty 8 Property Map</strong></div>
 
-    <!-- Hidden until unlocked -->
     <label id="addWrap" style="display:none"><input type="checkbox" id="addMode"> Add marker</label>
     <label id="editWrap" style="display:none"><input type="checkbox" id="editMode"> Edit mode</label>
 
@@ -71,16 +69,14 @@
     <button id="lockBtn" style="display:none">Lock</button>
 
     <button id="exportBtn" title="Download current markers as JSON">Export</button>
-    <span id="hint">Loading map…</span>
+    <span id="hint">Loading map… (build v-localpass-2)</span>
   </div>
 
   <div id="status">Looking for <code>map.jpg</code> in this folder…</div>
   <div id="map"></div>
 
-  <!-- Leaflet -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
 
-  <!-- Firebase (module CDN) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
     import {
@@ -100,7 +96,6 @@
       serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-    // ---- Firebase project config (yours) ----
     const firebaseConfig = {
       apiKey: "AIzaSyCcfOML9FD1Q5vcoCb3NdIlFKtx3LAovBc",
       authDomain: "dynasty8-property-map.firebaseapp.com",
@@ -110,9 +105,7 @@
       appId: "1:849316207524:web:9c921ad842fc188d027f31",
       measurementId: "G-VXG629H337"
     };
-    // ----------------------------------------
 
-    // DOM refs
     const addModeEl  = document.getElementById("addMode");
     const editModeEl = document.getElementById("editMode");
     const addWrap    = document.getElementById("addWrap");
@@ -124,17 +117,14 @@
     const statusEl   = document.getElementById("status");
     const mapEl      = document.getElementById("map");
 
-    // Config
-    const MAP_CANDIDATES = ["map.jpg"];      // force the single file
-    const LOCAL_EDIT_PASSWORD = "D8D8D8";    // <— your local password (not secure; just a gate)
+    const MAP_CANDIDATES = ["map.jpg"];
+    const LOCAL_EDIT_PASSWORD = "D8D8D8";
 
-    // State
-    let unlocked = false;         // UI gate
+    let unlocked = false;
     let map, layerGroup;
     let currentIconSize = 32;
-    const markers = new Map();    // id -> { id, name, x, y, shabby, nice, _marker }
+    const markers = new Map();
 
-    // Helpers
     const toast = (m) => { hintEl.textContent = m; console.log(m); };
     const houseIcon = (size = currentIconSize) => L.icon({
       iconUrl: "house.png",
@@ -160,8 +150,8 @@
           <div style="display:flex;align-items:center;gap:8px;">
             <h3 style="margin:0">${entry.name || "Property"}</h3>
             ${ (unlocked && editModeEl.checked)
-              ? '<button class="btn" data-action="edit" style="padding:4px 8px;border-radius:6px;border:none;cursor:pointer;background:#eee">Edit</button>\
-                 <button class="btn" data-action="delete" style="padding:4px 8px;border-radius:6px;border:none;cursor:pointer;background:#eee">Delete</button>'
+              ? '<button class="btn" data-action="edit">Edit</button>\
+                 <button class="btn" data-action="delete">Delete</button>'
               : '' }
           </div>
           ${entry.shabby ? `<p><a href="${entry.shabby}" target="_blank" rel="noopener">Shabby Apartment</a></p>` : ""}
@@ -198,10 +188,7 @@
           draggable: !!(unlocked && editModeEl.checked),
           autoPan: true,
           icon: houseIcon()
-        })
-        .addTo(layerGroup)
-        .bindTooltip(m.name || "Property", {direction: "top", offset: [0,-10]});
-
+        }).addTo(layerGroup).bindTooltip(m.name || "Property", {direction: "top", offset: [0,-10]});
         markers.set(entry.id, m);
         setMarkerPopup(m);
 
@@ -260,14 +247,12 @@
 
       layerGroup = L.layerGroup().addTo(map);
 
-      // Scale icons with zoom (min 16, max 48)
       map.on("zoomend", () => {
         const z = map.getZoom();
         currentIconSize = Math.max(16, Math.min(48, z * 4));
         markers.forEach(m => { if (m._marker) m._marker.setIcon(houseIcon()); });
       });
 
-      // Add marker (only when unlocked + add mode)
       map.on("click", async (e) => {
         if (!(unlocked && addModeEl.checked)) return;
         const {lat, lng} = e.latlng;
@@ -280,10 +265,8 @@
         });
       });
 
-      // start locked (view-only)
       setLockedUI(true);
 
-      // Real-time Firestore listener
       const colRef = collection(db, "markers");
       onSnapshot(colRef, (snap) => {
         const seen = new Set();
@@ -298,18 +281,13 @@
         toast(`Live markers: ${snap.size}`);
       });
 
-      // Export current snapshot to JSON
-      exportBtn.addEventListener("click", () => {
-        const arr = [];
-        markers.forEach(m => arr.push({ name: m.name, x: m.x, y: m.y, shabby: m.shabby, nice: m.nice }));
-        const blob = new Blob([JSON.stringify(arr, null, 2)], {type: "application/json"});
-        const url = URL.createObjectURL(blob);
-        const a = Object.assign(document.createElement("a"), { href: url, download: "markers.json" });
-        document.body.appendChild(a); a.click(); URL.revokeObjectURL(url); a.remove();
-        toast("Exported markers.json");
-      });
+      // ===== Robust local-password unlock + anonymous auth =====
+      function showFail(prefix, e){
+        const msg = (e && (e.message || e.code || String(e))) || "Unknown error";
+        console.error(prefix, e);
+        alert(prefix + ": " + msg);
+      }
 
-      // ===== Local password + anonymous auth =====
       unlockBtn.addEventListener("click", async () => {
         try {
           const pass = prompt("Enter edit password:");
@@ -318,39 +296,57 @@
             alert("Wrong password.");
             return;
           }
-          await signInAnonymously(auth);  // gives request.auth != null
-          // onAuthStateChanged will flip UI
+
+          hintEl.textContent = "Unlocking…";
+          if (auth.currentUser) {
+            setLockedUI(false);
+            hintEl.textContent = "Edit unlocked (local password)";
+            return;
+          }
+
+          await signInAnonymously(auth)
+            .then(() => {
+              setLockedUI(false);
+              hintEl.textContent = "Edit unlocked (local password)";
+            })
+            .catch((e) => { throw e; });
+
         } catch (e) {
-          console.error("Unlock/sign-in failed:", e);
-          alert("Unlock failed: " + (e?.message || e));
+          showFail("Unlock failed", e);
+          setLockedUI(true);
         }
       });
 
       lockBtn.addEventListener("click", async () => {
-        try { await signOut(auth); }
-        catch (e) {
-          console.error("Sign-out failed:", e);
-          alert("Sign-out failed: " + (e?.message || e));
+        try {
+          await signOut(auth);
+          setLockedUI(true);
+          hintEl.textContent = "Locked (view-only)";
+        } catch (e) {
+          showFail("Sign-out failed", e);
         }
       });
 
       editModeEl.addEventListener("change", applyEditMode);
     }
 
-    // Boot Firebase, then map
     try {
       const app = initializeApp(firebaseConfig);
       auth = getAuth(app);
       db   = getFirestore(app);
 
-      // Keep UI synced with auth
       onAuthStateChanged(auth, (user) => {
+        console.log("[auth] state changed:", user ? "signed-in" : "signed-out");
         if (user) {
           setLockedUI(false);
-          hintEl.textContent = "Edit unlocked (local password)";
+          if (!hintEl.textContent.includes("Edit unlocked")) {
+            hintEl.textContent = "Edit unlocked (local password)";
+          }
         } else {
           setLockedUI(true);
-          hintEl.textContent = "Locked (view-only)";
+          if (!hintEl.textContent.includes("Locked")) {
+            hintEl.textContent = "Locked (view-only)";
+          }
         }
       });
 
