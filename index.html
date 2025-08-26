@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>GTA V Real Estate Map</title>
+  <title>Dynasty 8 Property Map</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin />
   <style>
     html, body { height: 100%; margin: 0; }
     #map { position: absolute; inset: 56px 0 0 0; display:none; }
@@ -27,13 +27,15 @@
     .popup h3 { margin: 0 8px 6px 0; font-size: 16px; display:inline-block; }
     .popup p { margin: 0 0 8px; }
     .popup small { color:#666; }
-    #status { position: absolute; inset: 56px 0 0 0; display:grid; place-items:center; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#333; padding: 24px; text-align:center;}
+    #status { position: absolute; inset: 56px 0 0 0; display:grid; place-items:center;
+      font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color:#333; padding: 24px; text-align:center; }
     #status code { background:#eee; padding:2px 6px; border-radius:4px; }
   </style>
 </head>
 <body>
   <div id="toolbar">
-    <div><strong>GTA V Real Estate</strong></div>
+    <div><strong>Dynasty 8 Property Map</strong></div>
 
     <!-- Hidden until unlocked -->
     <label id="addWrap" style="display:none"><input type="checkbox" id="addMode"> Add marker</label>
@@ -42,33 +44,33 @@
     <button id="unlockBtn">Unlock</button>
     <button id="lockBtn" style="display:none">Lock</button>
 
-    <button id="syncBtn" title="Reload markers from GitHub">Sync now</button>
-    <button id="exportBtn" style="display:none" title="Download markers.json">Export</button>
-    <span id="hint">Loading map image…</span>
+    <button id="exportBtn" title="Download current markers as JSON">Export</button>
+    <span id="hint">Loading map…</span>
   </div>
 
   <div id="status">Looking for <code>map.jpg</code>, <code>map.jpeg</code>, or <code>map.png</code> in this folder…</div>
   <div id="map"></div>
 
-  <!-- Inline fallback so file:// works; safe to leave or empty it -->
-  <script id="markers" type="application/json">
-  [
-    {
-      "name": "Sample Apartment",
-      "x": 1000,
-      "y": 1000,
-      "shabby": "https://imgur.com/a/SHABBYEXAMPLE",
-      "nice": "https://imgur.com/a/NICEEXAMPLE"
-    }
-  ]
-  </script>
+  <!-- Leaflet -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script>
-    // ===== CONFIG =====
-    const EDIT_PASSWORD = "D88"; // <-- change if needed
-    const SAVE_ENDPOINT = "https://euphonious-speculoos-c7d2c2.netlify.app/.netlify/functions/save"; // Netlify function URL
-    const GITHUB_MARKERS_URL = "https://equestrix.github.io/Apartment-Map/markers.json"; // Source of truth
+  <!-- Firebase (module CDN) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+    import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+    // ---- Your Firebase project config (from your message) ----
+    const firebaseConfig = {
+      apiKey: "AIzaSyCcfOML9FD1Q5vcoCb3NdIlFKtx3LAovBc",
+      authDomain: "dynasty8-property-map.firebaseapp.com",
+      projectId: "dynasty8-property-map",
+      storageBucket: "dynasty8-property-map.firebasestorage.app",
+      messagingSenderId: "849316207524",
+      appId: "1:849316207524:web:9c921ad842fc188d027f31",
+      measurementId: "G-VXG629H337"
+    };
+    // ----------------------------------------------------------
 
     // ===== DOM refs =====
     const addModeEl  = document.getElementById("addMode");
@@ -78,43 +80,36 @@
     const exportBtn  = document.getElementById("exportBtn");
     const unlockBtn  = document.getElementById("unlockBtn");
     const lockBtn    = document.getElementById("lockBtn");
-    const syncBtn    = document.getElementById("syncBtn");
     const hintEl     = document.getElementById("hint");
     const statusEl   = document.getElementById("status");
     const mapEl      = document.getElementById("map");
 
     // ===== State =====
     const MAP_CANDIDATES = ["map.jpg","map.jpeg","map.png"];
-    const LS_KEY = "gta_map_markers_autosave_v1";
-    let unlocked = false;
+    let unlocked = false;                  // true when signed in
     let map, layerGroup;
-    let markersData = []; // {name,x,y,shabby,nice,_marker}
     let currentIconSize = 32;
+    const markers = new Map();             // id -> {id,name,x,y,shabby,nice,_marker}
 
-    // ===== Utils =====
-    function toast(msg){ hintEl.textContent = msg; }
-    function houseIcon(size = currentIconSize){
-      return L.icon({
-        iconUrl: "house.png",
-        iconSize: [size, size],
-        iconAnchor: [size/2, size/2],
-        tooltipAnchor: [0, -size/2]
-      });
+    // ===== Helpers =====
+    const toast = (m) => { hintEl.textContent = m; console.log(m); };
+    const houseIcon = (size = currentIconSize) => L.icon({
+      iconUrl: "house.png",
+      iconSize: [size, size],
+      iconAnchor: [size/2, size/2],
+      tooltipAnchor: [0, -size/2]
+    });
+
+    function setLockedUI(lock){
+      unlocked = !lock;
+      unlockBtn.style.display = lock ? "" : "none";
+      lockBtn.style.display   = lock ? "none" : "";
+      addWrap.style.display   = lock ? "none" : "";
+      editWrap.style.display  = lock ? "none" : "";
+      if (lock) editModeEl.checked = false;
+      applyEditMode();
+      toast(lock ? "Locked (view-only)" : "Edit unlocked.");
     }
-
-// Always load the live markers.json from GitHub Pages (cache-busted)
-async function loadMarkersFromGitHub() {
-  const url = GITHUB_MARKERS_URL + "?v=" + Date.now();
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    const txt = await res.text().catch(()=>"");
-    throw new Error(`markers.json fetch failed: ${res.status} ${txt.slice(0,120)}`);
-  }
-  const data = await res.json().catch(() => { throw new Error("markers.json is not valid JSON"); });
-  if (!Array.isArray(data)) throw new Error("markers.json is not an array");
-  console.log("[load] from GitHub:", data);
-  return data;
-}
 
     function setMarkerPopup(entry){
       const html = `
@@ -138,75 +133,69 @@ async function loadMarkersFromGitHub() {
         const editBtn = el.querySelector('[data-action="edit"]');
         const delBtn  = el.querySelector('[data-action="delete"]');
 
-        if (editBtn) editBtn.addEventListener('click', () => {
-          const newName   = prompt("Property name:", entry.name || "") ?? entry.name;
-          if (newName !== null) entry.name = newName;
-          const newShabby = prompt("Shabby Apartment link (optional):", entry.shabby || "") ?? entry.shabby;
-          if (newShabby !== null) entry.shabby = newShabby;
-          const newNice   = prompt("Nice Apartment link (optional):", entry.nice || "") ?? entry.nice;
-          if (newNice !== null) entry.nice = newNice;
-          entry._marker.setTooltipContent(entry.name || "Property");
-          setMarkerPopup(entry);
-          entry._marker.openPopup();
-          saveToGitHubAndLocal();
+        if (editBtn) editBtn.addEventListener('click', async () => {
+          const name   = prompt("Property name:", entry.name || "") ?? entry.name;
+          const shabby = prompt("Shabby Apartment link (optional):", entry.shabby || "") ?? entry.shabby;
+          const nice   = prompt("Nice Apartment link (optional):", entry.nice || "") ?? entry.nice;
+          await updateDoc(doc(db, "markers", entry.id), { name, shabby, nice, updatedAt: serverTimestamp() });
         });
 
-        if (delBtn) delBtn.addEventListener('click', () => {
+        if (delBtn) delBtn.addEventListener('click', async () => {
           if (!confirm("Delete this marker?")) return;
-          layerGroup.removeLayer(entry._marker);
-          const idx = markersData.indexOf(entry);
-          if (idx >= 0) markersData.splice(idx, 1);
-          saveToGitHubAndLocal();
+          await deleteDoc(doc(db, "markers", entry.id));
         });
       });
     }
 
-    function createMarker(entry){
-      entry._marker = L.marker([entry.y, entry.x], {
-        draggable: !!(unlocked && editModeEl.checked),
-        autoPan: true,
-        icon: houseIcon()
-      })
-      .addTo(layerGroup)
-      .bindTooltip(entry.name || "Property", {direction: "top", offset: [0,-10]});
+    function createOrUpdateMarker(entry){
+      let m = markers.get(entry.id);
+      if (!m) {
+        // create
+        m = { ...entry };
+        m._marker = L.marker([m.y, m.x], {
+          draggable: !!(unlocked && editModeEl.checked),
+          autoPan: true,
+          icon: houseIcon()
+        })
+        .addTo(layerGroup)
+        .bindTooltip(m.name || "Property", {direction: "top", offset: [0,-10]});
 
-      setMarkerPopup(entry);
+        markers.set(entry.id, m);
+        setMarkerPopup(m);
 
-      entry._marker.on('dragend', (e) => {
-        const pos = e.target.getLatLng();
-        entry.y = pos.lat; entry.x = pos.lng;
-        setMarkerPopup(entry);
-        saveToGitHubAndLocal();
-      });
+        m._marker.on('dragend', async (e) => {
+          const pos = e.target.getLatLng();
+          await updateDoc(doc(db, "markers", m.id), { y: pos.lat, x: pos.lng, updatedAt: serverTimestamp() });
+        });
+      } else {
+        // update
+        m.name = entry.name; m.x = entry.x; m.y = entry.y; m.shabby = entry.shabby || ""; m.nice = entry.nice || "";
+        m._marker.setLatLng([m.y, m.x]);
+        m._marker.setTooltipContent(m.name || "Property");
+        setMarkerPopup(m);
+      }
+    }
+
+    function removeMarker(id){
+      const m = markers.get(id);
+      if (m && m._marker) layerGroup.removeLayer(m._marker);
+      markers.delete(id);
     }
 
     function applyEditMode(){
       const canEdit = unlocked && editModeEl.checked;
-      markersData.forEach(e => {
-        if (e._marker) {
-          if (canEdit) e._marker.dragging.enable(); else e._marker.dragging.disable();
-          setMarkerPopup(e);
+      markers.forEach(m => {
+        if (m._marker) {
+          if (canEdit) m._marker.dragging.enable(); else m._marker.dragging.disable();
+          setMarkerPopup(m);
         }
       });
       toast(canEdit ? "Edit mode ON" : (unlocked ? "Edit mode OFF" : "Locked (view-only)"));
     }
 
-    function setLockedUI(lock){
-      unlocked = !lock;
-      document.getElementById("unlockBtn").style.display = lock ? "" : "none";
-      document.getElementById("lockBtn").style.display   = lock ? "none" : "";
-
-      addWrap.style.display   = lock ? "none" : "";
-      editWrap.style.display  = lock ? "none" : "";
-      exportBtn.style.display = lock ? "none" : "";
-
-      if (lock) { editModeEl.checked = false; }
-      applyEditMode();
-    }
-
     function tryLoadImage(i=0){
       if(i >= MAP_CANDIDATES.length){
-        statusEl.innerHTML = 'Could not find a map image. Put it next to <code>index.html</code> and name it <code>map.jpg</code>, <code>map.jpeg</code>, or <code>map.png</code>.';
+        statusEl.innerHTML = 'Put your map next to <code>index.html</code> and name it <code>map.jpg</code>, <code>map.jpeg</code>, or <code>map.png</code>.';
         return;
       }
       const src = MAP_CANDIDATES[i] + "?v=" + Date.now();
@@ -216,44 +205,7 @@ async function loadMarkersFromGitHub() {
       test.src = src;
     }
 
-    // Save helper: local safety + Netlify → GitHub (only when unlocked)
-    function saveToGitHubAndLocal(){
-  const clean = markersData.map(({name,x,y,shabby,nice}) => ({name,x,y,shabby,nice}));
-  try { localStorage.setItem(LS_KEY, JSON.stringify(clean)); } catch {}
-
-  if (!(unlocked && SAVE_ENDPOINT)) {
-    console.log("[save] skipped (locked or no endpoint)");
-    return;
-  }
-
-  console.log("[save] pushing to GitHub via Netlify…", clean);
-  fetch(SAVE_ENDPOINT, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ markers: clean, author: { name: "Agent", email: "agent@example.com" } })
-  })
-  .then(async (r) => {
-    const txt = await r.text();
-    if (!r.ok) throw new Error(txt || `HTTP ${r.status}`);
-    let info = {};
-    try { info = JSON.parse(txt); } catch {}
-    toast(`Saved to GitHub${info.commit_sha ? " (" + info.commit_sha.slice(0,7) + ")" : ""}.`);
-
-    // Immediately reload markers from GitHub so the UI reflects exactly what's saved
-    return loadMarkersFromGitHub().then((fresh) => {
-      // Replace on-map data
-      markersData.forEach(e => { if (e._marker) layerGroup.removeLayer(e._marker); });
-      markersData = fresh;
-      markersData.forEach(createMarker);
-      map.fire("zoomend");
-      console.log("[save] refreshed from GitHub:", info);
-    });
-  })
-  .catch(err => {
-    toast("Saved locally. (GitHub save failed)");
-    console.warn("[save] FAIL:", err.message);
-  });
-}
+    let db, auth; // set after init
 
     function init(imageUrl, w, h){
       statusEl.style.display = "none";
@@ -266,102 +218,85 @@ async function loadMarkersFromGitHub() {
 
       layerGroup = L.layerGroup().addTo(map);
 
-      // Scale icons with zoom (min 16, max 48)
+      // Resize icons with zoom (min 16, max 48)
       map.on("zoomend", () => {
         const z = map.getZoom();
         currentIconSize = Math.max(16, Math.min(48, z * 4));
-        markersData.forEach(entry => { if (entry._marker) entry._marker.setIcon(houseIcon()); });
+        markers.forEach(m => { if (m._marker) m._marker.setIcon(houseIcon()); });
       });
 
-     // Load & render markers (always from GitHub)
-(async () => {
-  try {
-    markersData = await loadMarkersFromGitHub();
-    layerGroup.clearLayers();
-    markersData.forEach(createMarker);
-    map.fire("zoomend"); // initial icon-size sync
-    toast("Loaded from GitHub.");
-  } catch (err) {
-    console.error("[load] FAIL:", err.message);
-    toast("Failed to load markers.json from GitHub. See console for details.");
-    // fallback to an empty list instead of inline sample to avoid confusion
-    markersData = [];
-  }
-})();
-
-      // Add marker (only when unlocked + add mode)
-      map.on("click", (e) => {
+      // Add marker on click (only when unlocked + add mode)
+      map.on("click", async (e) => {
         if (!(unlocked && addModeEl.checked)) return;
         const {lat, lng} = e.latlng;
-        const name   = prompt("Property name?");
-        if (name === null) return;
+        const name   = prompt("Property name?"); if (name === null) return;
         const shabby = prompt("Paste link for Shabby Apartment (optional):") || "";
         const nice   = prompt("Paste link for Nice Apartment (optional):") || "";
-        const entry  = { name, x: lng, y: lat, shabby, nice };
-        markersData.push(entry);
-        createMarker(entry);
-        saveToGitHubAndLocal();
+        await addDoc(collection(db, "markers"), {
+          name, x: lng, y: lat, shabby, nice,
+          createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+        });
       });
 
-      // Export backup
+      // Start view-only
+      setLockedUI(true);
+
+      // Real-time listener
+      const colRef = collection(db, "markers");
+      onSnapshot(colRef, (snap) => {
+        const seen = new Set();
+        snap.forEach(d => {
+          const v = d.data();
+          const entry = { id: d.id, name: v.name || "Property", x: v.x, y: v.y, shabby: v.shabby || "", nice: v.nice || "" };
+          createOrUpdateMarker(entry);
+          seen.add(d.id);
+        });
+        // remove any that disappeared
+        [...markers.keys()].forEach(id => { if (!seen.has(id)) removeMarker(id); });
+        map.fire("zoomend");
+        toast(`Live markers: ${snap.size}`);
+      });
+
+      // Export current view to JSON
       exportBtn.addEventListener("click", () => {
-        const clean = markersData.map(({name,x,y,shabby,nice}) => ({name,x,y,shabby,nice}));
-        const blob = new Blob([JSON.stringify(clean, null, 2)], {type: "application/json"});
+        const arr = [];
+        markers.forEach(m => arr.push({ name: m.name, x: m.x, y: m.y, shabby: m.shabby, nice: m.nice }));
+        const blob = new Blob([JSON.stringify(arr, null, 2)], {type: "application/json"});
         const url = URL.createObjectURL(blob);
         const a = Object.assign(document.createElement("a"), { href: url, download: "markers.json" });
         document.body.appendChild(a); a.click(); URL.revokeObjectURL(url); a.remove();
         toast("Exported markers.json");
       });
 
-      // Manual sync from GitHub without reloading
-      syncBtn.addEventListener("click", async () => {
-        toast("Syncing from GitHub…");
-        markersData.forEach(e => { if (e._marker) layerGroup.removeLayer(e._marker); });
-        markersData = await loadMarkersFromGitHub();
-        markersData.forEach(createMarker);
-        map.fire("zoomend");
-        toast("Synced.");
-      });
-
-      // Save on tab hide (best effort)
-      window.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "hidden" && unlocked && SAVE_ENDPOINT) {
-          try {
-            const clean = markersData.map(({name,x,y,shabby,nice}) => ({name,x,y,shabby,nice}));
-            navigator.sendBeacon?.(SAVE_ENDPOINT, new Blob(
-              [JSON.stringify({ markers: clean, author: { name: "Agent", email: "agent@example.com" } })],
-              { type: "application/json" }
-            ));
-          } catch {}
+      // Auth UI
+      unlockBtn.addEventListener("click", async () => {
+        try {
+          const email = prompt("Editor email:"); if (!email) return;
+          const pass  = prompt("Editor password:"); if (!pass) return;
+          await signInWithEmailAndPassword(auth, email, pass);
+        } catch (e) {
+          console.warn("Sign-in failed:", e);
+          toast("Wrong credentials or auth error.");
         }
       });
-
-      // Lock/Unlock controls
-      setLockedUI(true); // start locked
-
-      unlockBtn.addEventListener("click", () => {
-        const p = prompt("Enter password:");
-        if (p === EDIT_PASSWORD) { setLockedUI(false); toast("Edit unlocked."); }
-        else { toast("Wrong password."); }
-      });
-
-      lockBtn.addEventListener("click", () => { setLockedUI(true); toast("Locked (view-only)."); });
+      lockBtn.addEventListener("click", async () => { await signOut(auth); });
 
       editModeEl.addEventListener("change", applyEditMode);
     }
 
-    // boot
-    (function tryLoadImage(i=0){
-      if(i >= MAP_CANDIDATES.length){
-        statusEl.innerHTML = 'Could not find a map image. Put it next to <code>index.html</code> and name it <code>map.jpg</code>, <code>map.jpeg</code>, or <code>map.png</code>.';
-        return;
-      }
-      const src = MAP_CANDIDATES[i] + "?v=" + Date.now();
-      const test = new Image();
-      test.onload = () => init(src, test.naturalWidth, test.naturalHeight);
-      test.onerror = () => tryLoadImage(i+1);
-      test.src = src;
-    })();
+    // ===== Boot Firebase, then the map =====
+    try {
+      const app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      db   = getFirestore(app);
+      onAuthStateChanged(auth, (user) => {
+        if (user) setLockedUI(false); else setLockedUI(true);
+      });
+      tryLoadImage();
+    } catch (e) {
+      console.error("Firebase init failed:", e);
+      toast("Firebase init failed. Check console.");
+    }
   </script>
 </body>
 </html>
