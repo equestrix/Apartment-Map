@@ -6,7 +6,35 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin />
   <style>
-    html, body { height: 100%; margin: 0; }
+      :root{
+    /* Ocean color from your map border */
+    --sea: #0fa8d2; /* rgb(15,168,210) */
+  }
+
+  /* Page background */
+  html, body { 
+    height: 100%; 
+    margin: 0; 
+    background: var(--sea);
+  }
+
+  /* Leaflet background (behind the map image) */
+  .leaflet-container {
+    background: var(--sea);
+  }
+
+  /* Optional vignette (shadowy edge effect) */
+  body::before{
+    content:"";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 50%,
+      rgba(255,255,255,0) 40%,
+      rgba(0,0,0,0.12) 85%,
+      rgba(0,0,0,0.18) 100%);
+  }
+
     #map { position: absolute; inset: 56px 0 0 0; display:none; }
     #toolbar {
       position: fixed; inset: 0 0 auto 0; height: 56px;
