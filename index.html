@@ -273,14 +273,21 @@ async function loadMarkersFromGitHub() {
         markersData.forEach(entry => { if (entry._marker) entry._marker.setIcon(houseIcon()); });
       });
 
-      // Load & render markers (always from GitHub)
-      (async () => {
-        markersData = await loadMarkersFromGitHub();
-        // Clear existing layer group then render
-        layerGroup.clearLayers();
-        markersData.forEach(createMarker);
-        map.fire("zoomend"); // initial icon-size sync
-      })();
+     // Load & render markers (always from GitHub)
+(async () => {
+  try {
+    markersData = await loadMarkersFromGitHub();
+    layerGroup.clearLayers();
+    markersData.forEach(createMarker);
+    map.fire("zoomend"); // initial icon-size sync
+    toast("Loaded from GitHub.");
+  } catch (err) {
+    console.error("[load] FAIL:", err.message);
+    toast("Failed to load markers.json from GitHub. See console for details.");
+    // fallback to an empty list instead of inline sample to avoid confusion
+    markersData = [];
+  }
+})();
 
       // Add marker (only when unlocked + add mode)
       map.on("click", (e) => {
