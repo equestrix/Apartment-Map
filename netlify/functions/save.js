@@ -1,8 +1,6 @@
 // Netlify Function: commits markers.json to your GitHub repo
 // Set env vars in Netlify: GITHUB_TOKEN, REPO_OWNER, REPO_NAME, BRANCH, FILE_PATH, ALLOW_ORIGIN
 
-import fetch from 'node-fetch';
-
 export const handler = async (event) => {
   const cors = {
     'Access-Control-Allow-Origin': process.env.ALLOW_ORIGIN || '*',
