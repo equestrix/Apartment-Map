@@ -21,6 +21,7 @@
       background: var(--sea) !important;
     }
 
+    /* Optional soft vignette; delete if you want flat blue */
     body::before{
       content:"";
       position: fixed;
@@ -62,6 +63,7 @@
   <div id="toolbar">
     <div><strong>Dynasty 8 Property Map</strong></div>
 
+    <!-- Hidden until unlocked -->
     <label id="addWrap" style="display:none"><input type="checkbox" id="addMode"> Add marker</label>
     <label id="editWrap" style="display:none"><input type="checkbox" id="editMode"> Edit mode</label>
 
@@ -72,16 +74,33 @@
     <span id="hint">Loading map…</span>
   </div>
 
-  <div id="status">Looking for <code>map.jpg</code>, <code>map.jpeg</code>, or <code>map.png</code> in this folder…</div>
+  <div id="status">Looking for <code>map.jpg</code> in this folder…</div>
   <div id="map"></div>
 
+  <!-- Leaflet -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
 
+  <!-- Firebase (module CDN) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-    import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+    import {
+      getAuth,
+      onAuthStateChanged,
+      signInAnonymously,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+    import {
+      getFirestore,
+      collection,
+      onSnapshot,
+      addDoc,
+      doc,
+      updateDoc,
+      deleteDoc,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
+    // ---- Firebase project config (yours) ----
     const firebaseConfig = {
       apiKey: "AIzaSyCcfOML9FD1Q5vcoCb3NdIlFKtx3LAovBc",
       authDomain: "dynasty8-property-map.firebaseapp.com",
@@ -91,7 +110,9 @@
       appId: "1:849316207524:web:9c921ad842fc188d027f31",
       measurementId: "G-VXG629H337"
     };
+    // ----------------------------------------
 
+    // DOM refs
     const addModeEl  = document.getElementById("addMode");
     const editModeEl = document.getElementById("editMode");
     const addWrap    = document.getElementById("addWrap");
@@ -103,12 +124,17 @@
     const statusEl   = document.getElementById("status");
     const mapEl      = document.getElementById("map");
 
-    const MAP_CANDIDATES = ["map.jpg"];
-    let unlocked = false;
+    // Config
+    const MAP_CANDIDATES = ["map.jpg"];      // force the single file
+    const LOCAL_EDIT_PASSWORD = "D8D8D8";    // <— your local password (not secure; just a gate)
+
+    // State
+    let unlocked = false;         // UI gate
     let map, layerGroup;
     let currentIconSize = 32;
-    const markers = new Map();
+    const markers = new Map();    // id -> { id, name, x, y, shabby, nice, _marker }
 
+    // Helpers
     const toast = (m) => { hintEl.textContent = m; console.log(m); };
     const houseIcon = (size = currentIconSize) => L.icon({
       iconUrl: "house.png",
@@ -125,7 +151,7 @@
       editWrap.style.display  = lock ? "none" : "";
       if (lock) editModeEl.checked = false;
       applyEditMode();
-      toast(lock ? "Locked (view-only)" : "Edit unlocked.");
+      toast(lock ? "Locked (view-only)" : "Edit unlocked (local password)");
     }
 
     function setMarkerPopup(entry){
@@ -134,8 +160,8 @@
           <div style="display:flex;align-items:center;gap:8px;">
             <h3 style="margin:0">${entry.name || "Property"}</h3>
             ${ (unlocked && editModeEl.checked)
-              ? '<button class="btn" data-action="edit">Edit</button>\
-                 <button class="btn" data-action="delete">Delete</button>'
+              ? '<button class="btn" data-action="edit" style="padding:4px 8px;border-radius:6px;border:none;cursor:pointer;background:#eee">Edit</button>\
+                 <button class="btn" data-action="delete" style="padding:4px 8px;border-radius:6px;border:none;cursor:pointer;background:#eee">Delete</button>'
               : '' }
           </div>
           ${entry.shabby ? `<p><a href="${entry.shabby}" target="_blank" rel="noopener">Shabby Apartment</a></p>` : ""}
@@ -152,8 +178,8 @@
 
         if (editBtn) editBtn.addEventListener('click', async () => {
           const name   = prompt("Property name:", entry.name || "") ?? entry.name;
-          const shabby = prompt("Shabby Apartment link:", entry.shabby || "") ?? entry.shabby;
-          const nice   = prompt("Nice Apartment link:", entry.nice || "") ?? entry.nice;
+          const shabby = prompt("Shabby Apartment link (optional):", entry.shabby || "") ?? entry.shabby;
+          const nice   = prompt("Nice Apartment link (optional):", entry.nice || "") ?? entry.nice;
           await updateDoc(doc(db, "markers", entry.id), { name, shabby, nice, updatedAt: serverTimestamp() });
         });
 
@@ -172,7 +198,10 @@
           draggable: !!(unlocked && editModeEl.checked),
           autoPan: true,
           icon: houseIcon()
-        }).addTo(layerGroup).bindTooltip(m.name || "Property", {direction: "top", offset: [0,-10]});
+        })
+        .addTo(layerGroup)
+        .bindTooltip(m.name || "Property", {direction: "top", offset: [0,-10]});
+
         markers.set(entry.id, m);
         setMarkerPopup(m);
 
@@ -231,12 +260,14 @@
 
       layerGroup = L.layerGroup().addTo(map);
 
+      // Scale icons with zoom (min 16, max 48)
       map.on("zoomend", () => {
         const z = map.getZoom();
         currentIconSize = Math.max(16, Math.min(48, z * 4));
         markers.forEach(m => { if (m._marker) m._marker.setIcon(houseIcon()); });
       });
 
+      // Add marker (only when unlocked + add mode)
       map.on("click", async (e) => {
         if (!(unlocked && addModeEl.checked)) return;
         const {lat, lng} = e.latlng;
@@ -249,8 +280,10 @@
         });
       });
 
+      // start locked (view-only)
       setLockedUI(true);
 
+      // Real-time Firestore listener
       const colRef = collection(db, "markers");
       onSnapshot(colRef, (snap) => {
         const seen = new Set();
@@ -265,6 +298,7 @@
         toast(`Live markers: ${snap.size}`);
       });
 
+      // Export current snapshot to JSON
       exportBtn.addEventListener("click", () => {
         const arr = [];
         markers.forEach(m => arr.push({ name: m.name, x: m.x, y: m.y, shabby: m.shabby, nice: m.nice }));
@@ -275,17 +309,20 @@
         toast("Exported markers.json");
       });
 
-      // === Updated Unlock / Lock ===
-      const EDITOR_EMAIL = "editor@dynasty8.com";
-
+      // ===== Local password + anonymous auth =====
       unlockBtn.addEventListener("click", async () => {
         try {
-          const pass = prompt(`Password for ${EDITOR_EMAIL}:`);
+          const pass = prompt("Enter edit password:");
           if (!pass) return;
-          await signInWithEmailAndPassword(auth, EDITOR_EMAIL, pass);
+          if (pass !== LOCAL_EDIT_PASSWORD) {
+            alert("Wrong password.");
+            return;
+          }
+          await signInAnonymously(auth);  // gives request.auth != null
+          // onAuthStateChanged will flip UI
         } catch (e) {
-          console.error("Sign-in failed:", e);
-          alert("Sign-in failed: " + (e?.message || e));
+          console.error("Unlock/sign-in failed:", e);
+          alert("Unlock failed: " + (e?.message || e));
         }
       });
 
@@ -300,19 +337,23 @@
       editModeEl.addEventListener("change", applyEditMode);
     }
 
+    // Boot Firebase, then map
     try {
       const app = initializeApp(firebaseConfig);
       auth = getAuth(app);
       db   = getFirestore(app);
+
+      // Keep UI synced with auth
       onAuthStateChanged(auth, (user) => {
         if (user) {
           setLockedUI(false);
-          hintEl.textContent = `Edit unlocked — ${user.email}`;
+          hintEl.textContent = "Edit unlocked (local password)";
         } else {
           setLockedUI(true);
           hintEl.textContent = "Locked (view-only)";
         }
       });
+
       tryLoadImage();
     } catch (e) {
       console.error("Firebase init failed:", e);
