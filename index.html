@@ -102,25 +102,19 @@
       });
     }
 
-    // Always load the live markers.json from GitHub Pages (cache-busted)
-    async function loadMarkersFromGitHub() {
-      const url = GITHUB_MARKERS_URL + "?v=" + Date.now();
-      try {
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) throw new Error("markers.json fetch failed: " + res.status);
-        const data = await res.json();
-        if (!Array.isArray(data)) throw new Error("markers.json is not an array");
-        console.log("[load] from GitHub:", data);
-        return data;
-      } catch (err) {
-        console.warn("[load] GitHub load failed:", err.message);
-        // Fallback so the page still works if fetch fails
-        try {
-          const txt = document.getElementById("markers")?.textContent?.trim();
-          return txt ? JSON.parse(txt) : [];
-        } catch { return []; }
-      }
-    }
+// Always load the live markers.json from GitHub Pages (cache-busted)
+async function loadMarkersFromGitHub() {
+  const url = GITHUB_MARKERS_URL + "?v=" + Date.now();
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    const txt = await res.text().catch(()=>"");
+    throw new Error(`markers.json fetch failed: ${res.status} ${txt.slice(0,120)}`);
+  }
+  const data = await res.json().catch(() => { throw new Error("markers.json is not valid JSON"); });
+  if (!Array.isArray(data)) throw new Error("markers.json is not an array");
+  console.log("[load] from GitHub:", data);
+  return data;
+}
 
     function setMarkerPopup(entry){
       const html = `
