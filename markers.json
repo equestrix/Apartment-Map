@@ -26,5 +26,12 @@
     "y": 533,
     "shabby": "sefsef",
     "nice": "sefsef"
+  },
+  {
+    "name": "Test",
+    "x": 829,
+    "y": 619,
+    "shabby": "Test",
+    "nice": "Test"
   }
 ]
