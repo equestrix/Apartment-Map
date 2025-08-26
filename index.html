@@ -5,35 +5,36 @@
   <title>Dynasty 8 Property Map</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin />
+
   <style>
-      :root{
-    /* Ocean color from your map border */
-    --sea: #0fa8d2; /* rgb(15,168,210) */
-  }
+    :root{
+      /* Ocean color from your map border */
+      --sea: #0fa8d2; /* rgb(15,168,210) */
+    }
 
-  /* Page background */
-  html, body { 
-    height: 100%; 
-    margin: 0; 
-    background: var(--sea);
-  }
+    /* Page background */
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--sea) !important;
+    }
 
-  /* Leaflet background (behind the map image) */
-  .leaflet-container {
-    background: var(--sea);
-  }
+    /* Leaflet background (behind the map image) */
+    .leaflet-container {
+      background: var(--sea) !important;
+    }
 
-  /* Optional vignette (shadowy edge effect) */
-  body::before{
-    content:"";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    background: radial-gradient(circle at 50% 50%,
-      rgba(255,255,255,0) 40%,
-      rgba(0,0,0,0.12) 85%,
-      rgba(0,0,0,0.18) 100%);
-  }
+    /* Optional vignette effect — delete this block if you don’t want it */
+    body::before{
+      content:"";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at 50% 50%,
+        rgba(255,255,255,0) 40%,
+        rgba(0,0,0,0.12) 85%,
+        rgba(0,0,0,0.18) 100%);
+    }
 
     #map { position: absolute; inset: 56px 0 0 0; display:none; }
     #toolbar {
@@ -88,7 +89,7 @@
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
     import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-    // ---- Your Firebase project config (from your message) ----
+    // ---- Firebase project config ----
     const firebaseConfig = {
       apiKey: "AIzaSyCcfOML9FD1Q5vcoCb3NdIlFKtx3LAovBc",
       authDomain: "dynasty8-property-map.firebaseapp.com",
@@ -98,9 +99,9 @@
       appId: "1:849316207524:web:9c921ad842fc188d027f31",
       measurementId: "G-VXG629H337"
     };
-    // ----------------------------------------------------------
+    // ---------------------------------
 
-    // ===== DOM refs =====
+    // DOM refs
     const addModeEl  = document.getElementById("addMode");
     const editModeEl = document.getElementById("editMode");
     const addWrap    = document.getElementById("addWrap");
@@ -112,14 +113,12 @@
     const statusEl   = document.getElementById("status");
     const mapEl      = document.getElementById("map");
 
-    // ===== State =====
     const MAP_CANDIDATES = ["map.jpg","map.jpeg","map.png"];
-    let unlocked = false;                  // true when signed in
+    let unlocked = false;
     let map, layerGroup;
     let currentIconSize = 32;
-    const markers = new Map();             // id -> {id,name,x,y,shabby,nice,_marker}
+    const markers = new Map();
 
-    // ===== Helpers =====
     const toast = (m) => { hintEl.textContent = m; console.log(m); };
     const houseIcon = (size = currentIconSize) => L.icon({
       iconUrl: "house.png",
@@ -178,7 +177,6 @@
     function createOrUpdateMarker(entry){
       let m = markers.get(entry.id);
       if (!m) {
-        // create
         m = { ...entry };
         m._marker = L.marker([m.y, m.x], {
           draggable: !!(unlocked && editModeEl.checked),
@@ -196,7 +194,6 @@
           await updateDoc(doc(db, "markers", m.id), { y: pos.lat, x: pos.lng, updatedAt: serverTimestamp() });
         });
       } else {
-        // update
         m.name = entry.name; m.x = entry.x; m.y = entry.y; m.shabby = entry.shabby || ""; m.nice = entry.nice || "";
         m._marker.setLatLng([m.y, m.x]);
         m._marker.setTooltipContent(m.name || "Property");
@@ -233,7 +230,7 @@
       test.src = src;
     }
 
-    let db, auth; // set after init
+    let db, auth;
 
     function init(imageUrl, w, h){
       statusEl.style.display = "none";
@@ -246,14 +243,12 @@
 
       layerGroup = L.layerGroup().addTo(map);
 
-      // Resize icons with zoom (min 16, max 48)
       map.on("zoomend", () => {
         const z = map.getZoom();
         currentIconSize = Math.max(16, Math.min(48, z * 4));
         markers.forEach(m => { if (m._marker) m._marker.setIcon(houseIcon()); });
       });
 
-      // Add marker on click (only when unlocked + add mode)
       map.on("click", async (e) => {
         if (!(unlocked && addModeEl.checked)) return;
         const {lat, lng} = e.latlng;
@@ -266,10 +261,8 @@
         });
       });
 
-      // Start view-only
       setLockedUI(true);
 
-      // Real-time listener
       const colRef = collection(db, "markers");
       onSnapshot(colRef, (snap) => {
         const seen = new Set();
@@ -279,13 +272,11 @@
           createOrUpdateMarker(entry);
           seen.add(d.id);
         });
-        // remove any that disappeared
         [...markers.keys()].forEach(id => { if (!seen.has(id)) removeMarker(id); });
         map.fire("zoomend");
         toast(`Live markers: ${snap.size}`);
       });
 
-      // Export current view to JSON
       exportBtn.addEventListener("click", () => {
         const arr = [];
         markers.forEach(m => arr.push({ name: m.name, x: m.x, y: m.y, shabby: m.shabby, nice: m.nice }));
@@ -296,7 +287,6 @@
         toast("Exported markers.json");
       });
 
-      // Auth UI
       unlockBtn.addEventListener("click", async () => {
         try {
           const email = prompt("Editor email:"); if (!email) return;
@@ -312,14 +302,11 @@
       editModeEl.addEventListener("change", applyEditMode);
     }
 
-    // ===== Boot Firebase, then the map =====
     try {
       const app = initializeApp(firebaseConfig);
       auth = getAuth(app);
       db   = getFirestore(app);
-      onAuthStateChanged(auth, (user) => {
-        if (user) setLockedUI(false); else setLockedUI(true);
-      });
+      onAuthStateChanged(auth, (user) => { if (user) setLockedUI(false); else setLockedUI(true); });
       tryLoadImage();
     } catch (e) {
       console.error("Firebase init failed:", e);
