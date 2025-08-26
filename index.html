@@ -102,21 +102,27 @@
     function saveToBrowser(){
   const clean = markersData.map(({name,x,y,shabby,nice}) => ({name,x,y,shabby,nice}));
 
-  // always save locally (so edits survive refresh even if GitHub push fails)
+  // keep local safety copy
   try { localStorage.setItem(LS_KEY, JSON.stringify(clean)); } catch {}
 
-  // push to GitHub if unlocked
   if (unlocked && SAVE_ENDPOINT) {
     fetch(SAVE_ENDPOINT, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ markers: clean, author: { name: "Agent", email: "agent@example.com" } })
     })
-    .then(r => r.ok ? toast("Saved to GitHub.") : r.text().then(t => { throw new Error(t) }))
+    .then(async (r) => {
+      const txt = await r.text();
+      if (!r.ok) throw new Error(txt || `HTTP ${r.status}`);
+      toast("Saved to GitHub.");
+      console.log("[save] OK:", txt);
+    })
     .catch(err => {
-      console.warn("GitHub save failed:", err.message);
       toast("Saved locally. (GitHub save failed)");
+      console.warn("[save] FAIL:", err.message);
     });
+  } else {
+    console.log("[save] skipped (locked or no endpoint)");
   }
 }
 
