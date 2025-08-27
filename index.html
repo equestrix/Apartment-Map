@@ -17,9 +17,7 @@
       background: var(--sea) !important;
     }
 
-    .leaflet-container {
-      background: var(--sea) !important;
-    }
+    .leaflet-container { background: var(--sea) !important; }
 
     body::before{
       content:"";
@@ -51,7 +49,7 @@
     .leaflet-tooltip { background: #111; color: #fff; border: 0; border-radius: 6px; }
     .popup h3 { margin: 0 8px 6px 0; font-size: 16px; display:inline-block; }
     .popup p { margin: 0 0 8px; }
-    .popup small { color:#666; }
+    .popup small { color:#666; display:block; margin-top:6px; }
     #status { position: absolute; inset: 56px 0 0 0; display:grid; place-items:center;
       font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       color:#333; padding: 24px; text-align:center; }
@@ -69,7 +67,7 @@
     <button id="lockBtn" style="display:none">Lock</button>
 
     <button id="exportBtn" title="Download current markers as JSON">Export</button>
-    <span id="hint">Loading map… (build v-localpass-2)</span>
+    <span id="hint">Loading map… (build v-types-1)</span>
   </div>
 
   <div id="status">Looking for <code>map.jpg</code> in this folder…</div>
@@ -96,6 +94,7 @@
       serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
+    // === Your Firebase project config ===
     const firebaseConfig = {
       apiKey: "AIzaSyCcfOML9FD1Q5vcoCb3NdIlFKtx3LAovBc",
       authDomain: "dynasty8-property-map.firebaseapp.com",
@@ -106,6 +105,7 @@
       measurementId: "G-VXG629H337"
     };
 
+    // DOM refs
     const addModeEl  = document.getElementById("addMode");
     const editModeEl = document.getElementById("editMode");
     const addWrap    = document.getElementById("addWrap");
@@ -117,22 +117,98 @@
     const statusEl   = document.getElementById("status");
     const mapEl      = document.getElementById("map");
 
-    const MAP_CANDIDATES = ["map.jpg"];
-    const LOCAL_EDIT_PASSWORD = "D8D8D8";
+    // Config
+    const MAP_CANDIDATES = ["map.jpg"];      // force the single file
+    const LOCAL_EDIT_PASSWORD = "D8D8D8";    // local gate (not secure, just a guard)
 
+    // State
     let unlocked = false;
     let map, layerGroup;
     let currentIconSize = 32;
-    const markers = new Map();
+    const markers = new Map();   // id -> entry
 
+    // Helpers
     const toast = (m) => { hintEl.textContent = m; console.log(m); };
-    const houseIcon = (size = currentIconSize) => L.icon({
-      iconUrl: "house.png",
-      iconSize: [size, size],
-      iconAnchor: [size/2, size/2],
-      tooltipAnchor: [0, -size/2]
-    });
 
+    // --- Colored SVG house icon (data URI), sized dynamically ---
+    function svgHouseDataURL(color = "#ffffff", size = 32) {
+      const s = size; // size in px
+      const stroke = "#0a0a0a";
+      const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 64 64">
+  <g stroke="${stroke}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M8 30 L32 10 L56 30" fill="none"/>
+    <path d="M14 28 V54 H50 V28 Z" fill="${color}"/>
+    <path d="M26 54 V40 H38 V54 Z" fill="${color}"/>
+  </g>
+</svg>`.trim();
+      return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+    }
+
+    function iconFor(entry, size = currentIconSize){
+      // Color by type: apartment=white, penthouse=green, office=blue, motel=red
+      const type = (entry.type || "apartment").toLowerCase();
+      const colors = {
+        apartment: "#ffffff",
+        penthouse: "#22c55e",
+        office:    "#3b82f6",
+        motel:     "#ef4444"
+      };
+      const color = colors[type] || "#ffffff";
+      return L.icon({
+        iconUrl: svgHouseDataURL(color, size),
+        iconSize: [size, size],
+        iconAnchor: [size/2, size/2],
+        tooltipAnchor: [0, -size/2]
+      });
+    }
+
+    // Link helpers (schema)
+    function entryLinks(entry){
+      // New schema: entry.links = [{label,url}, ...]
+      if (Array.isArray(entry.links) && entry.links.length) return entry.links;
+
+      // Back-compat: legacy apartments with shabby/nice
+      const links = [];
+      if (entry.shabby) links.push({ label: "Shabby Apartment", url: entry.shabby });
+      if (entry.nice)   links.push({ label: "Nice Apartment",   url: entry.nice   });
+      return links;
+    }
+
+    function renderLinksHTML(entry){
+      const t = (entry.type || "apartment").toLowerCase();
+      const links = entryLinks(entry);
+
+      if (t === "apartment") {
+        // keep same labels; show whichever exist
+        const shabby = links.find(l => l.label.toLowerCase().includes("shabby"));
+        const nice   = links.find(l => l.label.toLowerCase().includes("nice"));
+        return `
+          ${shabby ? `<p><a href="${shabby.url}" target="_blank" rel="noopener">Shabby Apartment</a></p>` : ""}
+          ${nice   ? `<p><a href="${nice.url}"   target="_blank" rel="noopener">Nice Apartment</a></p>`   : ""}
+        `;
+      }
+
+      if (t === "office") {
+        const link = links[0];
+        return link ? `<p><a href="${link.url}" target="_blank" rel="noopener">Office</a></p>` : "";
+      }
+
+      if (t === "motel") {
+        const link = links[0];
+        return link ? `<p><a href="${link.url}" target="_blank" rel="noopener">Motel</a></p>` : "";
+      }
+
+      // penthouse: list all with their custom labels
+      if (t === "penthouse") {
+        return links.map(l => `<p><a href="${l.url}" target="_blank" rel="noopener">${l.label || "Album"}</a></p>`).join("");
+      }
+
+      // default
+      return links.map(l => `<p><a href="${l.url}" target="_blank" rel="noopener">${l.label || "Link"}</a></p>`).join("");
+    }
+
+    // UI state
     function setLockedUI(lock){
       unlocked = !lock;
       unlockBtn.style.display = lock ? "" : "none";
@@ -149,13 +225,13 @@
         <div class="popup">
           <div style="display:flex;align-items:center;gap:8px;">
             <h3 style="margin:0">${entry.name || "Property"}</h3>
+            <small>${(entry.type || "apartment").toUpperCase()}</small>
             ${ (unlocked && editModeEl.checked)
-              ? '<button class="btn" data-action="edit">Edit</button>\
-                 <button class="btn" data-action="delete">Delete</button>'
+              ? '<button class="btn" data-action="edit" style="margin-left:8px;padding:4px 8px;border-radius:6px;border:none;cursor:pointer;background:#eee">Edit</button>\
+                 <button class="btn" data-action="delete" style="padding:4px 8px;border-radius:6px;border:none;cursor:pointer;background:#eee">Delete</button>'
               : '' }
           </div>
-          ${entry.shabby ? `<p><a href="${entry.shabby}" target="_blank" rel="noopener">Shabby Apartment</a></p>` : ""}
-          ${entry.nice ? `<p><a href="${entry.nice}" target="_blank" rel="noopener">Nice Apartment</a></p>` : ""}
+          ${renderLinksHTML(entry)}
           <small>Coords: x=${entry.x.toFixed(1)}, y=${entry.y.toFixed(1)}</small>
         </div>`;
       entry._marker.bindPopup(html);
@@ -167,10 +243,43 @@
         const delBtn  = el.querySelector('[data-action="delete"]');
 
         if (editBtn) editBtn.addEventListener('click', async () => {
-          const name   = prompt("Property name:", entry.name || "") ?? entry.name;
-          const shabby = prompt("Shabby Apartment link (optional):", entry.shabby || "") ?? entry.shabby;
-          const nice   = prompt("Nice Apartment link (optional):", entry.nice || "") ?? entry.nice;
-          await updateDoc(doc(db, "markers", entry.id), { name, shabby, nice, updatedAt: serverTimestamp() });
+          const t = (entry.type || "apartment").toLowerCase();
+          const name = prompt("Property name:", entry.name || "") ?? entry.name;
+
+          let links = entryLinks(entry);
+          if (t === "apartment") {
+            const shabby = prompt("Shabby Apartment link (optional):", (links.find(l => l.label.toLowerCase().includes("shabby"))||{}).url || "") || "";
+            const nice   = prompt("Nice Apartment link (optional):",   (links.find(l => l.label.toLowerCase().includes("nice"))||{}).url   || "") || "";
+            links = [];
+            if (shabby) links.push({label:"Shabby Apartment", url:shabby});
+            if (nice)   links.push({label:"Nice Apartment",   url:nice});
+          } else if (t === "office") {
+            const u = prompt("Office link (single):", (links[0]?.url)||"") || "";
+            links = u ? [{label:"Office", url:u}] : [];
+          } else if (t === "motel") {
+            const u = prompt("Motel link (single):", (links[0]?.url)||"") || "";
+            links = u ? [{label:"Motel", url:u}] : [];
+          } else if (t === "penthouse") {
+            let n = parseInt(prompt("How many links? (2–6)", String(Math.max(2, Math.min(6, links.length || 2))))||"2",10);
+            if (isNaN(n) || n<2) n=2; if (n>6) n=6;
+            const newLinks = [];
+            for (let i=0;i<n;i++){
+              const defL = links[i]?.label || `Album ${i+1}`;
+              const defU = links[i]?.url   || "";
+              const label = prompt(`Link ${i+1} label:`, defL) || defL;
+              const url   = prompt(`Link ${i+1} URL:`, defU)   || defU;
+              if (url) newLinks.push({label, url});
+            }
+            links = newLinks;
+          }
+
+          await updateDoc(doc(db, "markers", entry.id), {
+            name, type: t, links,
+            // keep legacy fields for apartments so super old code still shows
+            shabby: (t==="apartment") ? (links.find(l=>/shabby/i.test(l.label))?.url || "") : "",
+            nice:   (t==="apartment") ? (links.find(l=>/nice/i.test(l.label))?.url   || "") : "",
+            updatedAt: serverTimestamp()
+          });
         });
 
         if (delBtn) delBtn.addEventListener('click', async () => {
@@ -182,13 +291,16 @@
 
     function createOrUpdateMarker(entry){
       let m = markers.get(entry.id);
+      const type = (entry.type || "apartment").toLowerCase();
       if (!m) {
         m = { ...entry };
         m._marker = L.marker([m.y, m.x], {
           draggable: !!(unlocked && editModeEl.checked),
           autoPan: true,
-          icon: houseIcon()
-        }).addTo(layerGroup).bindTooltip(m.name || "Property", {direction: "top", offset: [0,-10]});
+          icon: iconFor(entry)
+        })
+        .addTo(layerGroup)
+        .bindTooltip((m.name || "Property"), {direction: "top", offset: [0,-10]});
         markers.set(entry.id, m);
         setMarkerPopup(m);
 
@@ -197,8 +309,11 @@
           await updateDoc(doc(db, "markers", m.id), { y: pos.lat, x: pos.lng, updatedAt: serverTimestamp() });
         });
       } else {
-        m.name = entry.name; m.x = entry.x; m.y = entry.y; m.shabby = entry.shabby || ""; m.nice = entry.nice || "";
+        m.name = entry.name; m.x = entry.x; m.y = entry.y;
+        m.type = entry.type; m.links = entry.links;
+        m.shabby = entry.shabby; m.nice = entry.nice;
         m._marker.setLatLng([m.y, m.x]);
+        m._marker.setIcon(iconFor(entry));
         m._marker.setTooltipContent(m.name || "Property");
         setMarkerPopup(m);
       }
@@ -247,38 +362,125 @@
 
       layerGroup = L.layerGroup().addTo(map);
 
+      // Scale icons with zoom (min 16, max 48)
       map.on("zoomend", () => {
         const z = map.getZoom();
         currentIconSize = Math.max(16, Math.min(48, z * 4));
-        markers.forEach(m => { if (m._marker) m._marker.setIcon(houseIcon()); });
+        markers.forEach(m => { if (m._marker) m._marker.setIcon(iconFor(m)); });
       });
 
+      // Add marker (only when unlocked + add mode)
       map.on("click", async (e) => {
         if (!(unlocked && addModeEl.checked)) return;
         const {lat, lng} = e.latlng;
-        const name   = prompt("Property name?"); if (name === null) return;
-        const shabby = prompt("Paste link for Shabby Apartment (optional):") || "";
-        const nice   = prompt("Paste link for Nice Apartment (optional):") || "";
-        await addDoc(collection(db, "markers"), {
-          name, x: lng, y: lat, shabby, nice,
+
+        // CHOOSE TYPE
+        const tRaw = prompt("Type? (apartment / office / motel / penthouse)", "apartment");
+        if (!tRaw) return;
+        const type = tRaw.trim().toLowerCase();
+        if (!["apartment","office","motel","penthouse"].includes(type)) {
+          alert("Invalid type.");
+          return;
+        }
+
+        // NAME
+        const name = prompt("Property name?"); if (name === null) return;
+
+        // LINKS BY TYPE
+        let links = [];
+        if (type === "apartment") {
+          const shabby = prompt("Shabby Apartment link (optional):") || "";
+          const nice   = prompt("Nice Apartment link (optional):")   || "";
+          if (shabby) links.push({label:"Shabby Apartment", url:shabby});
+          if (nice)   links.push({label:"Nice Apartment",   url:nice});
+        } else if (type === "office") {
+          const u = prompt("Office link (single):") || "";
+          if (u) links.push({label:"Office", url:u});
+        } else if (type === "motel") {
+          const u = prompt("Motel link (single):") || "";
+          if (u) links.push({label:"Motel", url:u});
+        } else if (type === "penthouse") {
+          let n = parseInt(prompt("How many links? (2–6)", "2")||"2",10);
+          if (isNaN(n) || n<2) n=2; if (n>6) n=6;
+          for (let i=0;i<n;i++){
+            const label = prompt(`Link ${i+1} label:`, `Album ${i+1}`) || `Album ${i+1}`;
+            const url   = prompt(`Link ${i+1} URL:`) || "";
+            if (url) links.push({label, url});
+          }
+        }
+
+        // Save
+        const payload = {
+          name, type, links, x: lng, y: lat,
+          // legacy fields for apartments so old code still shows correctly
+          shabby: (type==="apartment") ? (links.find(l=>/shabby/i.test(l.label))?.url || "") : "",
+          nice:   (type==="apartment") ? (links.find(l=>/nice/i.test(l.label))?.url   || "") : "",
           createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-        });
+        };
+        await addDoc(collection(db, "markers"), payload);
       });
 
+      // start locked (view-only)
       setLockedUI(true);
 
+      // Real-time Firestore listener
       const colRef = collection(db, "markers");
       onSnapshot(colRef, (snap) => {
         const seen = new Set();
         snap.forEach(d => {
           const v = d.data();
-          const entry = { id: d.id, name: v.name || "Property", x: v.x, y: v.y, shabby: v.shabby || "", nice: v.nice || "" };
+
+          // Backward compatibility: infer type/links if missing
+          const type = (v.type || "apartment");
+          const links = Array.isArray(v.links) && v.links.length
+            ? v.links
+            : (function(){
+                const arr = [];
+                if (v.shabby) arr.push({label:"Shabby Apartment", url:v.shabby});
+                if (v.nice)   arr.push({label:"Nice Apartment",   url:v.nice});
+                // For office/motel legacy (if ever existed), treat as single nameless link
+                if (!arr.length && v.url) arr.push({label: (v.type||"Link"), url: v.url});
+                return arr;
+              })();
+
+          const entry = {
+            id: d.id,
+            name: v.name || "Property",
+            x: v.x, y: v.y,
+            type,
+            links,
+            shabby: v.shabby || "",
+            nice: v.nice || ""
+          };
+
           createOrUpdateMarker(entry);
           seen.add(d.id);
         });
         [...markers.keys()].forEach(id => { if (!seen.has(id)) removeMarker(id); });
         map.fire("zoomend");
         toast(`Live markers: ${snap.size}`);
+      });
+
+      // Export current snapshot to JSON (new schema)
+      exportBtn.addEventListener("click", () => {
+        const arr = [];
+        markers.forEach(m => {
+          arr.push({
+            name: m.name,
+            x: m.x,
+            y: m.y,
+            type: (m.type || "apartment"),
+            links: entryLinks(m),
+            // include legacy fields for safety
+            shabby: m.shabby || "",
+            nice: m.nice || ""
+          });
+        });
+        const blob = new Blob([JSON.stringify(arr, null, 2)], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = Object.assign(document.createElement("a"), { href: url, download: "markers.json" });
+        document.body.appendChild(a); a.click(); URL.revokeObjectURL(url); a.remove();
+        toast("Exported markers.json");
       });
 
       // ===== Robust local-password unlock + anonymous auth =====
@@ -330,6 +532,8 @@
       editModeEl.addEventListener("change", applyEditMode);
     }
 
+    // Boot Firebase, then map
+    let db, auth;
     try {
       const app = initializeApp(firebaseConfig);
       auth = getAuth(app);
