@@ -4,77 +4,127 @@
   <meta charset="utf-8" />
   <title>Property Map</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- Leaflet core -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin />
+  <!-- MarkerCluster CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <style>
-    :root{ --sea:#0fa8d2; }
+    :root{
+      --main: #93c47d;      /* header / brand */
+      --secondary:#b6d7a8;  /* body */
+      --accent:#d9ead3;     /* cards / accents */
+      --sea:#0fa8d2;        /* page/map bg */
+      --ink:#111;
+      --muted:#666;
+      --paper:#fff;
+    }
+
     html,body{ height:100%; margin:0; background:var(--sea); }
     .leaflet-container{ background:var(--sea); }
 
+    /* Layout */
     #map{ position:absolute; inset:56px 0 0 0; display:none; }
     #toolbar{
       position:fixed; inset:0 0 auto 0; height:56px;
       display:flex; gap:12px; align-items:center; padding:8px 12px;
-      background:rgba(30,30,30,.92); color:#fff;
+      background:var(--main); color:var(--ink);
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-      z-index:1000; backdrop-filter:blur(6px);
+      z-index:1000; box-shadow:0 2px 8px rgba(0,0,0,.2);
     }
     #brand{ display:flex; align-items:center; gap:8px; }
     #brand img{ height:36px; width:auto; display:block; }
     #toolbar label{ display:flex; align-items:center; gap:6px; }
     #toolbar input[type="checkbox"]{ transform:translateY(1px); }
-    #toolbar button{ border:none; padding:8px 12px; border-radius:8px; cursor:pointer; background:#fff; color:#111; font-weight:700; }
-    #toolbar button:hover{ filter:brightness(.95); }
-    .leaflet-tooltip{ background:#111; color:#fff; border-radius:6px; border:0; }
-    .popup h3{ margin:0 8px 6px 0; font-size:16px; display:inline-block; }
-    .popup p{ margin:0 0 6px; }
-    .popup small{ color:#666; display:block; margin-top:6px; }
-    #status{ position:absolute; inset:56px 0 0 0; display:grid; place-items:center; font:14px/1.4 system-ui; color:#333; padding:24px; text-align:center; }
-    #status code{ background:#eee; padding:2px 6px; border-radius:4px; }
+    #toolbar button{
+      border:none; padding:8px 12px; border-radius:8px; cursor:pointer;
+      background:#fff; color:#111; font-weight:700;
+    }
+    /* Hover fix: keep text visible, no vanishing */
+    #toolbar button:hover{ filter:brightness(.97); color:#111; }
 
+    /* Status bottom-left */
+    #status{
+      position:fixed; bottom:8px; left:10px;
+      font:13px/1.3 system-ui; color:#111;
+      background:rgba(255,255,255,.9);
+      padding:4px 8px; border-radius:6px; z-index:1200;
+      box-shadow:0 2px 6px rgba(0,0,0,.15);
+    }
+
+    /* Version bottom-right */
     #version{
-      position:fixed; bottom:6px; right:10px; font:12px/1 monospace; color:rgba(255,255,255,.92);
-      background:rgba(0,0,0,.6); padding:2px 6px; border-radius:4px; z-index:2000;
+      position:fixed; bottom:8px; right:10px; font:12px/1 monospace;
+      color:rgba(255,255,255,.92); background:rgba(0,0,0,.6);
+      padding:2px 6px; border-radius:4px; z-index:1200;
     }
 
     /* Settings button + menu */
-    #settings { margin-left:auto; position:relative; }
-    #settingsBtn { border:none; padding:8px 12px; border-radius:8px; background:#fff; font-weight:700; cursor:pointer; }
+    #settings{ margin-left:auto; position:relative; }
+    #settingsBtn{ background:#fff; color:#111; }
     #settingsMenu{
       position:absolute; right:0; top:44px; min-width:220px;
-      background:#fff; color:#111; border-radius:10px; box-shadow:0 12px 24px rgba(0,0,0,.2);
-      display:none; overflow:hidden; z-index:1200;
+      background:#fff; color:#111; border-radius:10px;
+      box-shadow:0 12px 24px rgba(0,0,0,.2);
+      display:none; overflow:hidden; z-index:1400;
     }
     #settingsMenu button{
-      display:block; width:100%; text-align:left; padding:10px 12px; border:0; background:transparent; cursor:pointer;
+      display:block; width:100%; text-align:left; padding:10px 12px;
+      border:0; background:transparent; cursor:pointer; color:#111;
     }
-    #settingsMenu button:hover{ background:#f2f2f2; }
+    #settingsMenu button:hover{ background:#f2f2f2; color:#111; } /* hover fix */
 
-    /* Modals */
+    /* Modals (styled with your palette) */
     .modal{ position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.45); z-index:1500; }
     .modal.show{ display:grid; }
     .card{
       width:min(560px, calc(100vw - 24px)); max-height:85vh; overflow:auto;
-      background:#fff; color:#111; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.25);
+      background:var(--secondary); color:var(--ink); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.25);
       font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
     }
-    .card header, .card footer{ padding:12px 14px; background:#f5f5f5; }
-    .card header{ border-radius:12px 12px 0 0; font-weight:700; }
-    .card footer{ border-radius:0 0 12px 12px; display:flex; gap:8px; justify-content:flex-end; }
-    .card main{ padding:14px; display:grid; gap:12px; }
+    .card header{ padding:12px 14px; background:var(--main); border-radius:12px 12px 0 0; font-weight:700; position:relative; }
+    .card main{ padding:14px; display:grid; gap:12px; background:var(--accent); }
+    .card footer{ padding:12px 14px; background:var(--secondary); border-radius:0 0 12px 12px; display:flex; gap:8px; justify-content:flex-end; }
+    .modal .btn{ border:none; padding:8px 12px; border-radius:8px; cursor:pointer; }
+    .btn.primary{ background:#111; color:#fff; }
+    .btn.ghost{ background:#eee; color:#111; }
     .row{ display:grid; gap:6px; }
     .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     label span{ font-weight:600; font-size:13px; }
     input[type="text"], input[type="url"], input[type="number"], select{
       width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:8px; font:14px system-ui;
+      background:#fff; color:#111;
     }
-    .muted{ color:#666; font-size:12px; }
+    .muted{ color:#333; font-size:12px; }
     .link-row{ display:grid; grid-template-columns:1fr 2fr; gap:8px; align-items:center; }
-    .btn{ border:none; padding:8px 12px; border-radius:8px; cursor:pointer; }
-    .btn.primary{ background:#111; color:#fff; }
-    .btn.ghost{ background:#eee; }
 
-    /* Drop Leaflet zoom buttons down so they don't overlap toolbar */
-    .leaflet-control-zoom { margin-top: 70px !important; }
+    /* Changelog X button (top-right) */
+    .modal .close-x{
+      position:absolute; right:10px; top:8px; width:28px; height:28px; border-radius:6px;
+      background:#fff; color:#111; border:0; cursor:pointer; font-weight:700;
+    }
+    .modal .close-x:hover{ filter:brightness(.95); }
+
+    /* Leaflet popup styling with palette */
+    .leaflet-popup-content-wrapper{
+      background:var(--secondary);
+      border:2px solid var(--main);
+      border-radius:10px;
+    }
+    .leaflet-popup-tip{ background:var(--secondary); }
+    .popup h3{
+      margin:0 0 6px 0; font-size:16px;
+      color:#111; background:var(--main); padding:4px 6px; border-radius:6px; display:inline-block;
+    }
+    .popup p{ margin:0 0 6px; }
+    .popup small{ color:#333; display:block; margin-top:6px; }
+    .popup a{ color:#003366; font-weight:600; }
+
+    /* Move Leaflet zoom controls to bottom-left */
+    .leaflet-control-zoom{
+      position:absolute !important; left:10px !important; bottom:48px !important;
+      top:auto !important; margin:0 !important;
+    }
   </style>
 </head>
 <body>
@@ -84,6 +134,7 @@
       <strong>Property Map</strong>
     </div>
 
+    <!-- Hidden until unlocked -->
     <label id="addWrap" style="display:none"><input type="checkbox" id="addMode"> Add</label>
     <label id="editWrap" style="display:none"><input type="checkbox" id="editMode"> Edit</label>
 
@@ -103,11 +154,13 @@
     </div>
   </div>
 
-  <div id="status">Looking for <code>map.jpg</code> in this folder…</div>
   <div id="map"></div>
+
+  <!-- Bottom badges -->
+  <div id="status">Loading map…</div>
   <div id="version"></div>
 
-  <!-- Add Property Modal (explicit-close only) -->
+  <!-- Add Property Modal -->
   <div id="addModal" class="modal" aria-hidden="true">
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="addTitle">
       <header id="addTitle">Add Property</header>
@@ -155,7 +208,9 @@
   <!-- Changelog Modal -->
   <div id="changelogModal" class="modal" aria-hidden="true">
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="chgTitle">
-      <header id="chgTitle">Changelog</header>
+      <header id="chgTitle">Changelog
+        <button id="chgCloseX" class="close-x" aria-label="Close">×</button>
+      </header>
       <main id="chgBody"><div style="padding:14px">Loading commits…</div></main>
       <footer><button id="chgClose" class="btn primary">Close</button></footer>
     </div>
@@ -170,19 +225,24 @@
     </div>
   </div>
 
+  <!-- Leaflet core -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
+  <!-- MarkerCluster JS -->
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <!-- App -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
     import { getAuth, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
     import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-    // ==== Build / Version
-    const VERSION = "beta 1.0.5";
-    const VERSION_NOTE = "Statistics modal + Edit modal + zoom control reposition";
+    // ===== Build / Version =====
+    const VERSION = "beta 1.0.6";
+    const VERSION_NOTE = "Type clustering, stylized UI, bottom-left status/zoom, hover fix, changelog X";
     document.getElementById("version").textContent = VERSION;
-    console.log(`Dynasty 8 Map – ${VERSION} — ${VERSION_NOTE}`);
+    console.log(`Dynasty 8 Map — ${VERSION} — ${VERSION_NOTE}`);
 
-    // ==== Firebase
+    // ===== Firebase =====
     const firebaseConfig = {
       apiKey: "AIzaSyCcfOML9FD1Q5vcoCb3NdIlFKtx3LAovBc",
       authDomain: "dynasty8-property-map.firebaseapp.com",
@@ -193,72 +253,82 @@
       measurementId: "G-VXG629H337"
     };
 
-    // --- DOM refs
-    const addModeEl = document.getElementById("addMode");
+    // ===== DOM refs =====
+    const addModeEl  = document.getElementById("addMode");
     const editModeEl = document.getElementById("editMode");
-    const addWrap = document.getElementById("addWrap");
-    const editWrap = document.getElementById("editWrap");
-    const unlockBtn = document.getElementById("unlockBtn");
-    const lockBtn = document.getElementById("lockBtn");
-    const hintEl = document.getElementById("hint");
-    const statusEl = document.getElementById("status");
-    const mapEl = document.getElementById("map");
+    const addWrap    = document.getElementById("addWrap");
+    const editWrap   = document.getElementById("editWrap");
+    const unlockBtn  = document.getElementById("unlockBtn");
+    const lockBtn    = document.getElementById("lockBtn");
+    const hintEl     = document.getElementById("hint");
+    const statusEl   = document.getElementById("status");
+    const mapEl      = document.getElementById("map");
 
-    // Settings + modals
-    const settingsBtn = document.getElementById("settingsBtn");
-    const settingsMenu = document.getElementById("settingsMenu");
-    const menuExport = document.getElementById("menuExport");
+    // Settings + menus
+    const settingsBtn   = document.getElementById("settingsBtn");
+    const settingsMenu  = document.getElementById("settingsMenu");
+    const menuExport    = document.getElementById("menuExport");
     const menuChangelog = document.getElementById("menuChangelog");
-    const menuStats = document.getElementById("menuStats");
+    const menuStats     = document.getElementById("menuStats");
 
+    // Changelog modal refs
     const chgModal = document.getElementById("changelogModal");
     const chgBody  = document.getElementById("chgBody");
     const chgClose = document.getElementById("chgClose");
+    const chgCloseX= document.getElementById("chgCloseX");
 
+    // Stats modal refs
     const statModal = document.getElementById("statsModal");
     const statBody  = document.getElementById("statBody");
     const statClose = document.getElementById("statClose");
 
-    // Add modal
-    const addModal = document.getElementById("addModal");
-    const fName = document.getElementById("f-name");
-    const fType = document.getElementById("f-type");
-    const linksArea = document.getElementById("linksArea");
-    const btnCancel = document.getElementById("btnCancel");
-    const btnSave = document.getElementById("btnSave");
+    // Add modal refs
+    const addModal   = document.getElementById("addModal");
+    const fName      = document.getElementById("f-name");
+    const fType      = document.getElementById("f-type");
+    const linksArea  = document.getElementById("linksArea");
+    const btnCancel  = document.getElementById("btnCancel");
+    const btnSave    = document.getElementById("btnSave");
     const coordsNote = document.getElementById("coordsNote");
 
-    // Edit modal
-    const editModal = document.getElementById("editModal");
-    const editBody  = document.getElementById("editBody");
-    const editCancel= document.getElementById("editCancel");
-    const editSave  = document.getElementById("editSave");
+    // Edit modal refs
+    const editModal  = document.getElementById("editModal");
+    const editBody   = document.getElementById("editBody");
+    const editCancel = document.getElementById("editCancel");
+    const editSave   = document.getElementById("editSave");
+    let editingEntry = null;
 
-    // --- Config
+    // ===== Config =====
     const LOCAL_EDIT_PASSWORD = "D8D8D8";
     const MAP_CANDIDATES = ["map.jpg","map.jpeg","map.png"];
     const REPO_OWNER = "equestrix";
     const REPO_NAME  = "Apartment-Map";
 
-    // --- State
+    // ===== State =====
     let unlocked = false;
-    let map, layerGroup, currentIconSize = 32;
-    let pendingLatLng = null;
-    let isAddModalOpen = false;
-    const markers = new Map();
+    let map, currentIconSize = 32;
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const db = getFirestore(app);
+    const db   = getFirestore(app);
 
-    const toast = (m) => { hintEl.textContent = m; console.log(m); };
+    // Marker storage + clusters (by type)
+    const markers = new Map(); // id -> {data, _marker}
+    const clusters = {
+      apartment: L.markerClusterGroup({ spiderfyOnMaxZoom:true, showCoverageOnHover:false, disableClusteringAtZoom: 4 }),
+      penthouse: L.markerClusterGroup({ spiderfyOnMaxZoom:true, showCoverageOnHover:false, disableClusteringAtZoom: 4 }),
+      office:    L.markerClusterGroup({ spiderfyOnMaxZoom:true, showCoverageOnHover:false, disableClusteringAtZoom: 4 }),
+      motel:     L.markerClusterGroup({ spiderfyOnMaxZoom:true, showCoverageOnHover:false, disableClusteringAtZoom: 4 }),
+    };
+
+    const toast = (m) => { hintEl.textContent = m; };
 
     function iconFor(entry, size = currentIconSize){
       const type = (entry.type || "apartment").toLowerCase();
       const files = {
-        apartment: "house-apartment.png",
-        penthouse: "house-penthouse.png",
-        office:    "house-office.png",
-        motel:     "house-motel.png",
+        apartment: "house-apartment.png", // white
+        penthouse: "house-penthouse.png", // green
+        office:    "house-office.png",    // blue
+        motel:     "house-motel.png",     // red
       };
       return L.icon({
         iconUrl: files[type] || files.apartment,
@@ -298,10 +368,21 @@
       return links.map(l => `<p><a href="${l.url}" target="_blank" rel="noopener">${l.label || "Link"}</a></p>`).join("");
     }
 
+    function applyEditMode(){
+      const canEdit = unlocked && editModeEl.checked;
+      markers.forEach(m => {
+        if (m._marker) {
+          if (canEdit) m._marker.dragging.enable(); else m._marker.dragging.disable();
+          setMarkerPopup(m);
+        }
+      });
+      toast(canEdit ? "Edit mode ON" : (unlocked ? "Edit mode OFF" : "Locked (view-only)"));
+    }
+
     function setLockedUI(lock){
       unlocked = !lock;
-      unlockBtn.style.display = lock ? "" : "none";
-      lockBtn.style.display   = lock ? "none" : "";
+      document.getElementById("unlockBtn").style.display = lock ? "" : "none";
+      document.getElementById("lockBtn").style.display   = lock ? "none" : "";
       addWrap.style.display   = lock ? "none" : "";
       editWrap.style.display  = lock ? "none" : "";
       if (lock) editModeEl.checked = false;
@@ -312,16 +393,15 @@
     function setMarkerPopup(entry){
       const html = `
         <div class="popup">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <h3 style="margin:0">${entry.name || "Property"}</h3>
-            <small>${(entry.type || "apartment").toUpperCase()}</small>
-            ${ (unlocked && editModeEl.checked)
-              ? '<button class="btn" data-action="edit" style="margin-left:8px;padding:4px 8px;border-radius:6px;border:none;cursor:pointer;background:#eee">Edit</button>\
-                 <button class="btn" data-action="delete" style="padding:4px 8px;border-radius:6px;border:none;cursor:pointer;background:#eee">Delete</button>'
-              : '' }
-          </div>
+          <h3>${entry.name || "Property"}</h3>
+          <p><strong>Type:</strong> ${(entry.type || "apartment")}</p>
           ${renderLinksHTML(entry)}
           <small>Coords: x=${entry.x.toFixed(1)}, y=${entry.y.toFixed(1)}</small>
+          ${(unlocked && editModeEl.checked) ? `
+          <div style="margin-top:6px;display:flex;gap:8px">
+            <button class="btn" data-action="edit" style="padding:4px 8px;background:#eee;border-radius:6px">Edit</button>
+            <button class="btn" data-action="delete" style="padding:4px 8px;background:#eee;border-radius:6px">Delete</button>
+          </div>` : ``}
         </div>`;
       entry._marker.bindPopup(html);
 
@@ -339,8 +419,13 @@
       });
     }
 
+    function ensureCluster(type){
+      return clusters[type] || clusters.apartment;
+    }
+
     function createOrUpdateMarker(entry){
       let m = markers.get(entry.id);
+      const t = (entry.type || "apartment").toLowerCase();
       if (!m) {
         m = { ...entry };
         m._marker = L.marker([m.y, m.x], {
@@ -348,8 +433,8 @@
           autoPan: true,
           icon: iconFor(entry)
         })
-        .addTo(layerGroup)
         .bindTooltip(m.name || "Property", {direction: "top", offset: [0,-10]});
+        ensureCluster(t).addLayer(m._marker);
         markers.set(entry.id, m);
         setMarkerPopup(m);
 
@@ -358,6 +443,12 @@
           await updateDoc(doc(db, "markers", m.id), { y: pos.lat, x: pos.lng, updatedAt: serverTimestamp() });
         });
       } else {
+        // If type changed, move between clusters
+        const oldType = (m.type || "apartment").toLowerCase();
+        if (oldType !== t && m._marker){
+          ensureCluster(oldType).removeLayer(m._marker);
+          ensureCluster(t).addLayer(m._marker);
+        }
         m.name = entry.name; m.x = entry.x; m.y = entry.y;
         m.type = entry.type; m.links = entry.links;
         m.shabby = entry.shabby; m.nice = entry.nice;
@@ -370,22 +461,14 @@
 
     function removeMarker(id){
       const m = markers.get(id);
-      if (m && m._marker) layerGroup.removeLayer(m._marker);
+      if (m && m._marker){
+        const t = (m.type || "apartment").toLowerCase();
+        ensureCluster(t).removeLayer(m._marker);
+      }
       markers.delete(id);
     }
 
-    function applyEditMode(){
-      const canEdit = unlocked && editModeEl.checked;
-      markers.forEach(m => {
-        if (m._marker) {
-          if (canEdit) m._marker.dragging.enable(); else m._marker.dragging.disable();
-          setMarkerPopup(m);
-        }
-      });
-      hintEl.textContent = canEdit ? "Edit mode ON" : (unlocked ? "Edit mode OFF" : "Locked (view-only)");
-    }
-
-    // ===== Add Modal logic (explicit close only) =====
+    // ===== Add Modal logic (explicit-close) =====
     function buildLinksFields(type){
       linksArea.innerHTML = "";
       if (type === "apartment") {
@@ -429,10 +512,13 @@
       }
     }
 
+    let pendingLatLng = null;
+    let isAddModalOpen = false;
+
     function openAddModal(latlng){
       pendingLatLng = latlng;
       isAddModalOpen = true;
-      coordsNote.textContent = `Placing at x=${latlng.lng.toFixed(1)}, y=${latlng.lat.toFixed(1)}`;
+      document.getElementById("coordsNote").textContent = `Placing at x=${latlng.lng.toFixed(1)}, y=${latlng.lat.toFixed(1)}`;
       fName.value = "";
       fType.value = "apartment";
       buildLinksFields("apartment");
@@ -446,6 +532,7 @@
 
     btnCancel.addEventListener("click", closeAddModal);
     fType.addEventListener("change", (e)=> buildLinksFields(e.target.value));
+
     btnSave.addEventListener("click", async ()=>{
       if (!pendingLatLng) return closeAddModal();
       const name = (fName.value || "").trim();
@@ -487,8 +574,6 @@
     });
 
     // ===== Edit modal =====
-    let editingEntry = null;
-
     function buildEditFields(type, entry){
       editBody.innerHTML = "";
       const nameRow = document.createElement("div");
@@ -514,7 +599,6 @@
       linksWrap.className = "row";
       editBody.appendChild(linksWrap);
 
-      // render link fields by type
       const links = Array.isArray(entry.links) ? entry.links.slice() : entryLinks(entry).slice();
 
       if (type === "apartment"){
@@ -569,13 +653,12 @@
       editModal.classList.add("show");
 
       // handle type change
-      editBody.addEventListener("change", onTypeChange, { once:true });
-      function onTypeChange(e){
+      const typeSelectWatcher = (e)=>{
         if (e.target && e.target.id === "e-type"){
           buildEditFields(e.target.value, editingEntry);
-          editBody.addEventListener("change", onTypeChange, { once:true });
         }
-      }
+      };
+      editBody.addEventListener("change", typeSelectWatcher, { once:true });
     }
 
     editCancel.addEventListener("click", ()=>{ editModal.classList.remove("show"); editingEntry=null; });
@@ -597,7 +680,7 @@
         if (u) links.push({label:"Office", url:u});
       } else if (type === "motel"){
         const u = (document.getElementById("e-motel").value || "").trim();
-        if (u) links.push({label:"Album", url:u});
+        if (u) links.push({label:"Album", url=u});
       } else if (type === "penthouse"){
         const rows = editBody.querySelectorAll("#e-phrows .link-row");
         rows.forEach((row,i)=>{
@@ -637,24 +720,30 @@
 
     // ===== Map + data =====
     function init(imageUrl, w, h){
-      statusEl.style.display = "none";
       mapEl.style.display = "block";
 
       const bounds = [[0,0],[h,w]];
-      map = L.map("map", { crs: L.CRS.Simple, minZoom: -2, maxZoom: 5, zoomControl: true, attributionControl: false });
+      const mapOpts = { crs: L.CRS.Simple, minZoom: -2, maxZoom: 5, zoomControl: true, attributionControl: false };
+      map = L.map("map", mapOpts);
       L.imageOverlay(imageUrl, bounds).addTo(map);
       map.fitBounds(bounds);
 
-      layerGroup = L.layerGroup().addTo(map);
+      // Add clusters to map
+      clusters.apartment.addTo(map);
+      clusters.penthouse.addTo(map);
+      clusters.office.addTo(map);
+      clusters.motel.addTo(map);
 
+      // Scale icons with zoom (min 16, max 48)
       map.on("zoomend", () => {
         const z = map.getZoom();
         currentIconSize = Math.max(16, Math.min(48, z * 4));
         markers.forEach(m => { if (m._marker) m._marker.setIcon(iconFor(m)); });
       });
 
+      // Add marker (only when unlocked + add mode)
       map.on("click", (e) => {
-        if (isAddModalOpen) return; // keep add modal open until Save/Cancel
+        if (isAddModalOpen) return; // keep modal open until Save/Cancel
         if (!(unlocked && addModeEl.checked)) return;
         openAddModal(e.latlng);
       });
@@ -678,11 +767,14 @@
           createOrUpdateMarker(entry);
           seen.add(d.id);
         });
+        // Remove stale
         [...markers.keys()].forEach(id => { if (!seen.has(id)) removeMarker(id); });
-        map.fire("zoomend");
-        // Update stats live if open
+        // Update badges
         if (statModal.classList.contains("show")) renderStats();
-        hintEl.textContent = `Loaded ${markers.size} properties`;
+        statusEl.textContent = `Loaded ${markers.size} properties`;
+        hintEl.textContent = "Ready";
+        // Sync icon size initially
+        map.fire("zoomend");
       });
 
       // Unlock/Lock
@@ -700,23 +792,21 @@
       editModeEl.addEventListener("change", applyEditMode);
     }
 
-    // ===== Image loader
+    // Image loader
     function tryLoadImage(i=0){
       if(i >= MAP_CANDIDATES.length){
-        statusEl.innerHTML = 'Could not find a map image. Put it next to <code>index.html</code> and name it <code>map.jpg</code>, <code>map.jpeg</code>, or <code>map.png</code>.';
-        hintEl.textContent = "Map image not found.";
+        statusEl.textContent = 'Could not find map.jpg/jpeg/png next to index.html.';
         console.warn("[map] no candidates worked");
         return;
       }
       const src = MAP_CANDIDATES[i] + "?v=" + Date.now();
-      console.log("[map] trying:", src);
       const img = new Image();
-      img.onload = () => { console.log("[map] loaded:", src, img.naturalWidth+"x"+img.naturalHeight); init(src, img.naturalWidth, img.naturalHeight); };
-      img.onerror = () => { console.warn("[map] failed:", src); tryLoadImage(i+1); };
+      img.onload = () => init(src, img.naturalWidth, img.naturalHeight);
+      img.onerror = () => tryLoadImage(i+1);
       img.src = src;
     }
 
-    // ==== Settings menu hooks ====
+    // ===== Settings menu & actions =====
     settingsBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       const open = settingsMenu.style.display === "block";
@@ -724,7 +814,7 @@
     });
     document.addEventListener("click", () => { settingsMenu.style.display = "none"; });
 
-    // Export (moved into Settings)
+    // Export markers (JSON)
     menuExport.addEventListener("click", () => {
       settingsMenu.style.display = "none";
       const clean = [...markers.values()].map(({name,x,y,type,links,shabby,nice}) => ({name,x,y,type,links,shabby,nice}));
@@ -741,6 +831,7 @@
     // Changelog
     menuChangelog.addEventListener("click", () => { settingsMenu.style.display = "none"; openChangelog(); });
     chgClose.addEventListener("click", () => chgModal.classList.remove("show"));
+    chgCloseX.addEventListener("click", () => chgModal.classList.remove("show"));
 
     async function openChangelog(){
       chgBody.innerHTML = '<div style="padding:14px">Loading commits…</div>';
@@ -776,31 +867,6 @@
 
     // Boot
     tryLoadImage();
-  </script>
-
-  <!-- Safe fallback loader (keeps page usable if module fails) -->
-  <script>
-    (function(){
-      if (typeof window.tryLoadImage === "function") return;
-      const MAP_CANDIDATES=["map.jpg","map.jpeg","map.png"];
-      function fallbackInit(imageUrl,w,h){
-        const mEl=document.getElementById("map"), sEl=document.getElementById("status");
-        if (sEl) sEl.style.display="none"; if (mEl) mEl.style.display="block";
-        if (!window.L) return console.warn("[fallback] Leaflet missing");
-        const bounds=[[0,0],[h,w]];
-        const m=L.map("map",{crs:L.CRS.Simple,minZoom:-2,maxZoom:5,zoomControl:true,attributionControl:false});
-        L.imageOverlay(imageUrl,bounds).addTo(m); m.fitBounds(bounds);
-        console.log("[fallback] map shown with", imageUrl);
-      }
-      function load(i=0){
-        if(i>=MAP_CANDIDATES.length){const s=document.getElementById("status"); if(s) s.innerHTML='Could not find map image.'; return;}
-        const src=MAP_CANDIDATES[i]+"?v="+Date.now(); const im=new Image();
-        console.log("[fallback] trying", src);
-        im.onload=()=>{ if(typeof window.init==="function") window.init(src,im.naturalWidth,im.naturalHeight); else fallbackInit(src,im.naturalWidth,im.naturalHeight); };
-        im.onerror=()=>load(i+1); im.src=src;
-      }
-      window.addEventListener("load", load);
-    })();
   </script>
 </body>
 </html>
