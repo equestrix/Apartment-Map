@@ -2,10 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Dynasty 8 Property Map</title>
+  <title>Property Map</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin />
-
   <style>
     :root{ --sea:#0fa8d2; }
     html,body{ height:100%; margin:0; background:var(--sea); }
@@ -19,6 +18,8 @@
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
       z-index:1000; backdrop-filter:blur(6px);
     }
+    #brand{ display:flex; align-items:center; gap:8px; }
+    #brand img{ height:36px; width:auto; display:block; }
     #toolbar label{ display:flex; align-items:center; gap:6px; }
     #toolbar input[type="checkbox"]{ transform:translateY(1px); }
     #toolbar button{ border:none; padding:8px 12px; border-radius:8px; cursor:pointer; background:#fff; color:#111; font-weight:700; }
@@ -35,7 +36,20 @@
       background:rgba(0,0,0,.6); padding:2px 6px; border-radius:4px; z-index:2000;
     }
 
-    /* --- Add Property Modal --- */
+    /* Settings button + menu */
+    #settings { margin-left:auto; position:relative; }
+    #settingsBtn { border:none; padding:8px 12px; border-radius:8px; background:#fff; font-weight:700; cursor:pointer; }
+    #settingsMenu{
+      position:absolute; right:0; top:44px; min-width:220px;
+      background:#fff; color:#111; border-radius:10px; box-shadow:0 12px 24px rgba(0,0,0,.2);
+      display:none; overflow:hidden; z-index:1200;
+    }
+    #settingsMenu button{
+      display:block; width:100%; text-align:left; padding:10px 12px; border:0; background:transparent; cursor:pointer;
+    }
+    #settingsMenu button:hover{ background:#f2f2f2; }
+
+    /* Modals */
     .modal{ position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.45); z-index:1500; }
     .modal.show{ display:grid; }
     .card{
@@ -62,7 +76,10 @@
 </head>
 <body>
   <div id="toolbar">
-    <div><strong>Dynasty 8 Property Map</strong></div>
+    <div id="brand">
+      <img src="Dynasty8-GTAV-Logo.png" alt="Dynasty 8">
+      <strong>Property Map</strong>
+    </div>
 
     <label id="addWrap" style="display:none"><input type="checkbox" id="addMode"> Add</label>
     <label id="editWrap" style="display:none"><input type="checkbox" id="editMode"> Edit</label>
@@ -71,13 +88,23 @@
     <button id="lockBtn" style="display:none">Lock</button>
 
     <span id="hint">Loading…</span>
+
+    <!-- Settings (right) -->
+    <div id="settings">
+      <button id="settingsBtn">⚙️ Settings</button>
+      <div id="settingsMenu" role="menu" aria-hidden="true">
+        <button id="menuExport">Export markers</button>
+        <button id="menuChangelog">Changelog</button>
+        <button id="menuStats">Statistics</button>
+      </div>
+    </div>
   </div>
 
   <div id="status">Looking for <code>map.jpg</code> in this folder…</div>
   <div id="map"></div>
   <div id="version"></div>
 
-  <!-- Add Property Modal -->
+  <!-- Add Property Modal (explicit-close only) -->
   <div id="addModal" class="modal" aria-hidden="true">
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="addTitle">
       <header id="addTitle">Add Property</header>
@@ -110,16 +137,35 @@
     </div>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
+  <!-- Changelog Modal -->
+  <div id="changelogModal" class="modal" aria-hidden="true">
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="chgTitle">
+      <header id="chgTitle">Changelog</header>
+      <main id="chgBody"><div style="padding:14px">Loading commits…</div></main>
+      <footer><button id="chgClose" class="btn primary">Close</button></footer>
+    </div>
+  </div>
 
+  <!-- Stats Modal (placeholder for 1.0.5) -->
+  <div id="statsModal" class="modal" aria-hidden="true">
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="statTitle">
+      <header id="statTitle">Statistics</header>
+      <main id="statBody">
+        <div style="padding:14px">Coming in <strong>beta 1.0.5</strong>: totals by type and overall property count.</div>
+      </main>
+      <footer><button id="statClose" class="btn primary">Close</button></footer>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
     import { getAuth, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
     import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ==== Build / Version
-    const VERSION = "beta 1.0.3";
-    const VERSION_NOTE = "Robust image loader + penthouse links 1–8 + type modal";
+    const VERSION = "beta 1.0.4";
+    const VERSION_NOTE = "Settings menu (Export/Changelog); Add modal explicit-close; motel Album + red note; logo + title";
     document.getElementById("version").textContent = VERSION;
     console.log(`Dynasty 8 Map – ${VERSION} — ${VERSION_NOTE}`);
 
@@ -145,7 +191,21 @@
     const statusEl = document.getElementById("status");
     const mapEl = document.getElementById("map");
 
-    // Modal refs
+    // Settings + modals
+    const settingsBtn = document.getElementById("settingsBtn");
+    const settingsMenu = document.getElementById("settingsMenu");
+    const menuExport = document.getElementById("menuExport");
+    const menuChangelog = document.getElementById("menuChangelog");
+    const menuStats = document.getElementById("menuStats");
+
+    const chgModal = document.getElementById("changelogModal");
+    const chgBody  = document.getElementById("chgBody");
+    const chgClose = document.getElementById("chgClose");
+
+    const statModal = document.getElementById("statsModal");
+    const statClose = document.getElementById("statClose");
+
+    // Add modal
     const addModal = document.getElementById("addModal");
     const fName = document.getElementById("f-name");
     const fType = document.getElementById("f-type");
@@ -157,11 +217,14 @@
     // --- Config
     const LOCAL_EDIT_PASSWORD = "D8D8D8";
     const MAP_CANDIDATES = ["map.jpg","map.jpeg","map.png"];
+    const REPO_OWNER = "equestrix";
+    const REPO_NAME  = "Apartment-Map";
 
     // --- State
     let unlocked = false;
     let map, layerGroup, currentIconSize = 32;
     let pendingLatLng = null;
+    let isAddModalOpen = false;
     const markers = new Map();
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
@@ -201,10 +264,13 @@
         const nice   = links.find(l => /nice/i.test(l.label));
         return `${shabby?`<p><a href="${shabby.url}" target="_blank" rel="noopener">Shabby Apartment</a></p>`:""}${nice?`<p><a href="${nice.url}" target="_blank" rel="noopener">Nice Apartment</a></p>`:""}`;
       }
-      if (t === "office" || t === "motel") {
+      if (t === "office") {
+        const link = links[0]; return link ? `<p><a href="${link.url}" target="_blank" rel="noopener">Office</a></p>` : "";
+      }
+      if (t === "motel") {
         const link = links[0];
-        const label = t === "office" ? "Office" : "Motel";
-        return link ? `<p><a href="${link.url}" target="_blank" rel="noopener">${label}</a></p>` : "";
+        const note = `<div style="color:#d60000;font-weight:700;margin-top:6px">Don’t use this link in your listing, you need a door photo!</div>`;
+        return (link ? `<p><a href="${link.url}" target="_blank" rel="noopener">Album</a></p>` : "") + note;
       }
       if (t === "penthouse") {
         return links.map(l => `<p><a href="${l.url}" target="_blank" rel="noopener">${l.label || "Album"}</a></p>`).join("");
@@ -303,7 +369,7 @@
       hintEl.textContent = canEdit ? "Edit mode ON" : (unlocked ? "Edit mode OFF" : "Locked (view-only)");
     }
 
-    // ===== Add Modal logic =====
+    // ===== Add Modal logic (explicit close only) =====
     function buildLinksFields(type){
       linksArea.innerHTML = "";
       if (type === "apartment") {
@@ -315,7 +381,7 @@
       } else if (type === "office") {
         linksArea.innerHTML = `<label><span>Office URL</span><input id="f-office" type="url" placeholder="https://imgur.com/a/…" /></label>`;
       } else if (type === "motel") {
-        linksArea.innerHTML = `<label><span>Motel URL</span><input id="f-motel" type="url" placeholder="https://imgur.com/a/…" /></label>`;
+        linksArea.innerHTML = `<label><span>Motel Album URL</span><input id="f-motel" type="url" placeholder="https://imgur.com/a/…" /></label>`;
       } else if (type === "penthouse") {
         const wrap = document.createElement("div");
         wrap.className = "row";
@@ -349,6 +415,7 @@
 
     function openAddModal(latlng){
       pendingLatLng = latlng;
+      isAddModalOpen = true;
       coordsNote.textContent = `Placing at x=${latlng.lng.toFixed(1)}, y=${latlng.lat.toFixed(1)}`;
       fName.value = "";
       fType.value = "apartment";
@@ -358,8 +425,10 @@
     function closeAddModal(){
       addModal.classList.remove("show");
       pendingLatLng = null;
+      isAddModalOpen = false;
     }
 
+    // Only Save/Cancel close it
     btnCancel.addEventListener("click", closeAddModal);
     fType.addEventListener("change", (e)=> buildLinksFields(e.target.value));
     btnSave.addEventListener("click", async ()=>{
@@ -381,7 +450,7 @@
         if (u) links.push({label:"Office", url:u});
       } else if (type === "motel"){
         const u = (document.getElementById("f-motel").value || "").trim();
-        if (u) links.push({label:"Motel", url:u});
+        if (u) links.push({label:"Album", url:u});
       } else if (type === "penthouse"){
         const rows = linksArea.querySelectorAll(".link-row");
         rows.forEach((row, i)=>{
@@ -402,9 +471,6 @@
       toast("Property added.");
     });
 
-    addModal.addEventListener("click", (e)=>{ if (e.target === addModal) closeAddModal(); });
-    window.addEventListener("keydown",(e)=>{ if(e.key==="Escape" && addModal.classList.contains("show")) closeAddModal(); });
-
     // ===== Map + data =====
     function init(imageUrl, w, h){
       statusEl.style.display = "none";
@@ -424,6 +490,7 @@
       });
 
       map.on("click", (e) => {
+        if (isAddModalOpen) return; // don't close or reopen while modal is up
         if (!(unlocked && addModeEl.checked)) return;
         openAddModal(e.latlng);
       });
@@ -449,7 +516,7 @@
         });
         [...markers.keys()].forEach(id => { if (!seen.has(id)) removeMarker(id); });
         map.fire("zoomend");
-        toast(`Live markers: ${snap.size}`);
+        toast(`Live markers: ${snap.size}`); // will be moved to Stats in 1.0.5
       });
 
       unlockBtn.addEventListener("click", async () => {
@@ -466,7 +533,7 @@
       editModeEl.addEventListener("change", applyEditMode);
     }
 
-    // ===== Primary image loader (with console logs)
+    // ===== Primary image loader
     function tryLoadImage(i=0){
       if(i >= MAP_CANDIDATES.length){
         statusEl.innerHTML = 'Could not find a map image. Put it next to <code>index.html</code> and name it <code>map.jpg</code>, <code>map.jpeg</code>, or <code>map.png</code>.';
@@ -482,33 +549,94 @@
       img.src = src;
     }
 
+    // ==== Settings menu hooks ====
+    settingsBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = settingsMenu.style.display === "block";
+      settingsMenu.style.display = open ? "none" : "block";
+    });
+    document.addEventListener("click", () => { settingsMenu.style.display = "none"; });
+
+    // Export (moved into Settings)
+    menuExport.addEventListener("click", () => {
+      settingsMenu.style.display = "none";
+      const clean = [...markers.values()].map(({name,x,y,type,links,shabby,nice}) => ({name,x,y,type,links,shabby,nice}));
+      const blob = new Blob([JSON.stringify(clean, null, 2)], {type: "application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = Object.assign(document.createElement("a"), { href: url, download: "markers.json" });
+      document.body.appendChild(a); a.click(); URL.revokeObjectURL(url); a.remove();
+    });
+
+    // Stats (placeholder)
+    menuStats.addEventListener("click", () => {
+      settingsMenu.style.display = "none";
+      document.getElementById("statsModal").classList.add("show");
+    });
+    statClose.addEventListener("click", () => document.getElementById("statsModal").classList.remove("show"));
+
+    // Changelog
+    menuChangelog.addEventListener("click", () => { settingsMenu.style.display = "none"; openChangelog(); });
+    chgClose.addEventListener("click", () => chgModal.classList.remove("show"));
+
+    async function openChangelog(){
+      chgBody.innerHTML = '<div style="padding:14px">Loading commits…</div>';
+      chgModal.classList.add("show");
+      const cacheKey = "chg_"+REPO_OWNER+"_"+REPO_NAME;
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) { chgBody.innerHTML = cached; return; }
+      try{
+        const url = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits?per_page=20`;
+        const res = await fetch(url, { headers: { "Accept":"application/vnd.github+json" }});
+        if (!res.ok) throw new Error("GitHub API " + res.status);
+        const commits = await res.json();
+        const html = commits.map(c=>{
+          const msg = (c.commit?.message || "").trim();
+          const [title, ...rest] = msg.split(/\r?\n/);
+          const body = rest.join("\n").trim();
+          const date = new Date(c.commit?.author?.date || c.commit?.committer?.date || Date.now());
+          const when = date.toLocaleString();
+          return `
+            <div class="commit" style="padding:12px 14px; border-bottom:1px solid #eee">
+              <h4 style="margin:0 0 6px; font-size:14px">${escapeHtml(title || "Commit")}</h4>
+              ${body ? `<div class="muted" style="white-space:pre-wrap">${escapeHtml(body)}</div>` : ""}
+              <small class="muted">${escapeHtml(c.commit?.author?.name || c.author?.login || "Unknown")} — ${when}</small>
+            </div>`;
+        }).join("");
+        chgBody.innerHTML = html || '<div style="padding:14px">No recent commits.</div>';
+        sessionStorage.setItem(cacheKey, chgBody.innerHTML);
+      }catch(err){
+        chgBody.innerHTML = `<div style="padding:14px;color:#b00020">Failed to load commits: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+    function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
     // Boot
     tryLoadImage();
   </script>
 
-  <!-- ===== Safe fallback loader (keeps page usable if module fails) ===== -->
+  <!-- Safe fallback loader (keeps page usable if module fails) -->
   <script>
-  (function(){
-    if (typeof window.tryLoadImage === "function") return; // module loaded fine
-    const MAP_CANDIDATES=["map.jpg","map.jpeg","map.png"];
-    function fallbackInit(imageUrl,w,h){
-      const mEl=document.getElementById("map"), sEl=document.getElementById("status");
-      if (sEl) sEl.style.display="none"; if (mEl) mEl.style.display="block";
-      if (!window.L) return console.warn("[fallback] Leaflet missing");
-      const bounds=[[0,0],[h,w]];
-      const m=L.map("map",{crs:L.CRS.Simple,minZoom:-2,maxZoom:5,zoomControl:true,attributionControl:false});
-      L.imageOverlay(imageUrl,bounds).addTo(m); m.fitBounds(bounds);
-      console.log("[fallback] map shown with", imageUrl);
-    }
-    function load(i=0){
-      if(i>=MAP_CANDIDATES.length){const s=document.getElementById("status"); if(s) s.innerHTML='Could not find map image.'; return;}
-      const src=MAP_CANDIDATES[i]+"?v="+Date.now(); const im=new Image();
-      console.log("[fallback] trying", src);
-      im.onload=()=>{ if(typeof window.init==="function") window.init(src,im.naturalWidth,im.naturalHeight); else fallbackInit(src,im.naturalWidth,im.naturalHeight); };
-      im.onerror=()=>load(i+1); im.src=src;
-    }
-    window.addEventListener("load", load);
-  })();
+    (function(){
+      if (typeof window.tryLoadImage === "function") return;
+      const MAP_CANDIDATES=["map.jpg","map.jpeg","map.png"];
+      function fallbackInit(imageUrl,w,h){
+        const mEl=document.getElementById("map"), sEl=document.getElementById("status");
+        if (sEl) sEl.style.display="none"; if (mEl) mEl.style.display="block";
+        if (!window.L) return console.warn("[fallback] Leaflet missing");
+        const bounds=[[0,0],[h,w]];
+        const m=L.map("map",{crs:L.CRS.Simple,minZoom:-2,maxZoom:5,zoomControl:true,attributionControl:false});
+        L.imageOverlay(imageUrl,bounds).addTo(m); m.fitBounds(bounds);
+        console.log("[fallback] map shown with", imageUrl);
+      }
+      function load(i=0){
+        if(i>=MAP_CANDIDATES.length){const s=document.getElementById("status"); if(s) s.innerHTML='Could not find map image.'; return;}
+        const src=MAP_CANDIDATES[i]+"?v="+Date.now(); const im=new Image();
+        console.log("[fallback] trying", src);
+        im.onload=()=>{ if(typeof window.init==="function") window.init(src,im.naturalWidth,im.naturalHeight); else fallbackInit(src,im.naturalWidth,im.naturalHeight); };
+        im.onerror=()=>load(i+1); im.src=src;
+      }
+      window.addEventListener("load", load);
+    })();
   </script>
 </body>
 </html>
