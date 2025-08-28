@@ -6,9 +6,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <!-- Leaflet core -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin />
-  <!-- MarkerCluster CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <style>
     :root{
       --main:#93c47d;       /* header / brand */
@@ -227,8 +224,6 @@
 
   <!-- Leaflet core -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
-  <!-- MarkerCluster JS -->
-  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
   <!-- App -->
   <script type="module">
@@ -237,8 +232,8 @@
     import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ===== Build / Version =====
-    const VERSION = "beta 1.0.6";
-    const VERSION_NOTE = "Type clustering, stylized UI, bottom-left status/zoom, hover fix, changelog X";
+    const VERSION = "beta 1.0.7";
+    const VERSION_NOTE = "Remove clustering; use per-type layers; keep 1.0.6 styling & features";
     document.getElementById("version").textContent = VERSION;
     console.log("Dynasty 8 Map — " + VERSION + " — " + VERSION_NOTE);
 
@@ -312,13 +307,13 @@
     let unlocked = false;
     let map, currentIconSize = 32;
 
-    // Marker storage + clusters (by type)
+    // Marker storage + per-type groups (no clustering)
     const markers = new Map(); // id -> {data, _marker}
-    const clusters = {
-      apartment: L.markerClusterGroup({ spiderfyOnMaxZoom:true, showCoverageOnHover:false, disableClusteringAtZoom: 4 }),
-      penthouse: L.markerClusterGroup({ spiderfyOnMaxZoom:true, showCoverageOnHover:false, disableClusteringAtZoom: 4 }),
-      office:    L.markerClusterGroup({ spiderfyOnMaxZoom:true, showCoverageOnHover:false, disableClusteringAtZoom: 4 }),
-      motel:     L.markerClusterGroup({ spiderfyOnMaxZoom:true, showCoverageOnHover:false, disableClusteringAtZoom: 4 })
+    const groups = {
+      apartment: L.layerGroup(),
+      penthouse: L.layerGroup(),
+      office:    L.layerGroup(),
+      motel:     L.layerGroup()
     };
 
     function toast(m){ hintEl.textContent = m; }
@@ -438,11 +433,12 @@
       });
     }
 
-    function ensureCluster(type){
-      if (type === "penthouse") return clusters.penthouse;
-      if (type === "office")    return clusters.office;
-      if (type === "motel")     return clusters.motel;
-      return clusters.apartment;
+    function layerFor(type){
+      var t = (type || "apartment").toLowerCase();
+      if (t === "penthouse") return groups.penthouse;
+      if (t === "office")    return groups.office;
+      if (t === "motel")     return groups.motel;
+      return groups.apartment;
     }
 
     function createOrUpdateMarker(entry){
@@ -465,7 +461,7 @@
           icon: iconFor(m)
         })
         .bindTooltip(m.name || "Property", {direction:"top", offset:[0,-10]});
-        ensureCluster(t).addLayer(m._marker);
+        layerFor(t).addLayer(m._marker);
         markers.set(entry.id, m);
         setMarkerPopup(m);
 
@@ -474,11 +470,10 @@
           await updateDoc(doc(db, "markers", m.id), { y: pos.lat, x: pos.lng, updatedAt: serverTimestamp() });
         });
       } else {
-        // move cluster if type changed
         var oldType = (m.type || "apartment").toLowerCase();
         if (oldType !== t && m._marker){
-          ensureCluster(oldType).removeLayer(m._marker);
-          ensureCluster(t).addLayer(m._marker);
+          layerFor(oldType).removeLayer(m._marker);
+          layerFor(t).addLayer(m._marker);
         }
         m.name = entry.name;
         m.x = entry.x;
@@ -500,7 +495,7 @@
       var m = markers.get(id);
       if (m && m._marker){
         var t = (m.type || "apartment").toLowerCase();
-        ensureCluster(t).removeLayer(m._marker);
+        layerFor(t).removeLayer(m._marker);
       }
       markers.delete(id);
     }
@@ -800,11 +795,11 @@
       L.imageOverlay(imageUrl, bounds).addTo(map);
       map.fitBounds(bounds);
 
-      // Add clusters to map
-      clusters.apartment.addTo(map);
-      clusters.penthouse.addTo(map);
-      clusters.office.addTo(map);
-      clusters.motel.addTo(map);
+      // Add per-type groups to map
+      groups.apartment.addTo(map);
+      groups.penthouse.addTo(map);
+      groups.office.addTo(map);
+      groups.motel.addTo(map);
 
       // Scale icons with zoom (min 16, max 48)
       map.on("zoomend", function(){
