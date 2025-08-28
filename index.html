@@ -4,7 +4,6 @@
   <meta charset="utf-8" />
   <title>Property Map</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <!-- Leaflet core -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin />
   <style>
     :root{
@@ -12,15 +11,10 @@
       --secondary:#b6d7a8;  /* middle green */
       --accent:#d9ead3;     /* lightest green (cards / popups) */
       --sea:#0fa8d2;        /* page/map bg (ocean) */
-      --ink:#111;
-      --muted:#666;
-      --paper:#fff;
+      --ink:#111; --muted:#666; --paper:#fff;
     }
-
     html,body{ height:100%; margin:0; background:var(--sea); }
     .leaflet-container{ background:var(--sea); }
-
-    /* Layout */
     #map{ position:absolute; inset:56px 0 0 0; display:none; }
     #toolbar{
       position:fixed; inset:0 0 auto 0; height:56px;
@@ -37,26 +31,17 @@
       border:none; padding:8px 12px; border-radius:8px; cursor:pointer;
       background:#fff; color:#111; font-weight:700;
     }
-    /* Hover fix: keep text visible */
     #toolbar button:hover{ filter:brightness(.97); color:#111; }
-
-    /* Status bottom-left */
     #status{
-      position:fixed; bottom:8px; left:10px;
-      font:13px/1.3 system-ui; color:#111;
-      background:rgba(255,255,255,.9);
-      padding:4px 8px; border-radius:6px; z-index:1200;
+      position:fixed; bottom:8px; left:10px; font:13px/1.3 system-ui; color:#111;
+      background:rgba(255,255,255,.9); padding:4px 8px; border-radius:6px; z-index:1200;
       box-shadow:0 2px 6px rgba(0,0,0,.15);
     }
-
-    /* Version bottom-right */
     #version{
       position:fixed; bottom:8px; right:10px; font:12px/1 monospace;
       color:rgba(255,255,255,.92); background:rgba(0,0,0,.6);
       padding:2px 6px; border-radius:4px; z-index:1200;
     }
-
-    /* Settings button + menu */
     #settings{ margin-left:auto; position:relative; }
     #settingsBtn{ background:#fff; color:#111; }
     #settingsMenu{
@@ -69,9 +54,7 @@
       display:block; width:100%; text-align:left; padding:10px 12px;
       border:0; background:transparent; cursor:pointer; color:#111;
     }
-    #settingsMenu button:hover{ background:#f2f2f2; color:#111; } /* hover fix */
-
-    /* Modals (styled with your palette) + fade animations */
+    #settingsMenu button:hover{ background:#f2f2f2; color:#111; }
     .modal{
       position:fixed; inset:0; display:grid; place-items:center;
       background:rgba(0,0,0,.45); z-index:1500;
@@ -95,36 +78,27 @@
     .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     label span{ font-weight:600; font-size:13px; }
     input[type="text"], input[type="url"], input[type="number"], select{
-      width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:8px; font:14px system-ui;
-      background:#fff; color:#111;
+      width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:8px; font:14px system-ui; background:#fff; color:#111;
     }
     .muted{ color:#333; font-size:12px; }
     .link-row{ display:grid; grid-template-columns:1fr 2fr; gap:8px; align-items:center; }
-
-    /* Changelog X button (top-right) */
     .modal .close-x{
       position:absolute; right:10px; top:8px; width:28px; height:28px; border-radius:6px;
       background:#fff; color:#111; border:0; cursor:pointer; font-weight:700;
     }
     .modal .close-x:hover{ filter:brightness(.95); }
-
-    /* Popup restyle: title/border darker green, body lightest green */
     .leaflet-popup-content-wrapper{
-      background:var(--accent);
-      border:2px solid var(--main);
-      border-radius:10px;
+      background:var(--accent); border:2px solid var(--main); border-radius:10px;
     }
     .leaflet-popup-tip{ background:var(--accent); }
     .popup h3{
-      margin:0 0 6px 0; font-size:16px;
-      color:#111; background:var(--main); padding:4px 6px; border-radius:6px; display:inline-block;
+      margin:0 0 6px 0; font-size:16px; color:#111;
+      background:var(--main); padding:4px 6px; border-radius:6px; display:inline-block;
     }
     .popup p{ margin:0 0 6px; }
     .popup small{ color:#333; display:block; margin-top:6px; }
     .popup a{ color:#003366; font-weight:600; text-decoration:none; border-bottom:1px solid transparent; }
     .popup a:hover{ border-bottom-color:#003366; }
-
-    /* Move Leaflet zoom controls to bottom-left */
     .leaflet-control-zoom{
       position:absolute !important; left:10px !important; bottom:48px !important;
       top:auto !important; margin:0 !important;
@@ -138,7 +112,6 @@
       <strong>Property Map</strong>
     </div>
 
-    <!-- Hidden until unlocked -->
     <label id="addWrap" style="display:none" title="Enable click-to-add mode"><input type="checkbox" id="addMode"> Add</label>
     <label id="editWrap" style="display:none" title="Enable drag/edit mode"><input type="checkbox" id="editMode"> Edit</label>
 
@@ -147,7 +120,6 @@
 
     <span id="hint">Loading…</span>
 
-    <!-- Settings (right) -->
     <div id="settings">
       <button id="settingsBtn" title="Open settings">⚙️ Settings</button>
       <div id="settingsMenu" role="menu" aria-hidden="true">
@@ -160,11 +132,9 @@
 
   <div id="map"></div>
 
-  <!-- Bottom badges -->
   <div id="status">Loading map…</div>
   <div id="version"></div>
 
-  <!-- Add Property Modal -->
   <div id="addModal" class="modal" aria-hidden="true">
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="addTitle">
       <header id="addTitle">Add Property</header>
@@ -174,7 +144,6 @@
             <input id="f-name" type="text" placeholder="e.g., Eclipse Towers Apt. 3">
           </label>
         </div>
-
         <div class="grid-2">
           <label><span>Type</span>
             <select id="f-type">
@@ -186,7 +155,6 @@
           </label>
           <div class="row"><span class="muted">Type controls link fields.</span></div>
         </div>
-
         <div id="linksArea" class="row"></div>
         <div class="muted" id="coordsNote">Will be placed where you clicked.</div>
       </main>
@@ -197,7 +165,6 @@
     </div>
   </div>
 
-  <!-- Edit Property Modal -->
   <div id="editModal" class="modal" aria-hidden="true">
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="editTitle">
       <header id="editTitle">Edit Property</header>
@@ -209,7 +176,6 @@
     </div>
   </div>
 
-  <!-- Changelog Modal -->
   <div id="changelogModal" class="modal" aria-hidden="true">
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="chgTitle">
       <header id="chgTitle">Changelog
@@ -220,7 +186,6 @@
     </div>
   </div>
 
-  <!-- Statistics Modal -->
   <div id="statsModal" class="modal" aria-hidden="true">
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="statTitle">
       <header id="statTitle">Statistics</header>
@@ -229,18 +194,19 @@
     </div>
   </div>
 
-  <!-- Leaflet core -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
 
-  <!-- App -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
     import { getAuth, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-    import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+    import {
+      getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp,
+      enableIndexedDbPersistence, getDocsFromCache, getDocsFromServer
+    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ===== Build / Version =====
-    const VERSION = "beta 1.0.8";
-    const VERSION_NOTE = "Popup restyle, UI tooltips + modal fade, stats last updated, unsaved-change warnings, autofocus";
+    const VERSION = "beta 1.0.9";
+    const VERSION_NOTE = "Faster first load: IndexedDB cache, cache-first paint, incremental live updates, batched initial markers";
     document.getElementById("version").textContent = VERSION;
     console.log("Dynasty 8 Map — " + VERSION + " — " + VERSION_NOTE);
 
@@ -254,10 +220,17 @@
       appId: "1:849316207524:web:9c921ad842fc188d027f31",
       measurementId: "G-VXG629H337"
     };
-
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
+
+    // Auto sign in anonymously so reads always work (rules permitting)
+    try { await signInAnonymously(auth); console.log("[auth] anonymous sign-in OK"); }
+    catch(e){ console.warn("[auth] anonymous sign-in failed:", e?.message || e); }
+
+    // Enable offline persistence (cache)
+    try { await enableIndexedDbPersistence(db); console.log("[fs] IndexedDB persistence enabled"); }
+    catch(e){ console.warn("[fs] persistence unavailable:", e?.message || e); }
 
     // ===== DOM refs =====
     const addModeEl  = document.getElementById("addMode");
@@ -270,25 +243,21 @@
     const statusEl   = document.getElementById("status");
     const mapEl      = document.getElementById("map");
 
-    // Settings + menus
     const settingsBtn   = document.getElementById("settingsBtn");
     const settingsMenu  = document.getElementById("settingsMenu");
     const menuExport    = document.getElementById("menuExport");
     const menuChangelog = document.getElementById("menuChangelog");
     const menuStats     = document.getElementById("menuStats");
 
-    // Changelog modal refs
     const chgModal  = document.getElementById("changelogModal");
     const chgBody   = document.getElementById("chgBody");
     const chgClose  = document.getElementById("chgClose");
     const chgCloseX = document.getElementById("chgCloseX");
 
-    // Stats modal refs
     const statModal = document.getElementById("statsModal");
     const statBody  = document.getElementById("statBody");
     const statClose = document.getElementById("statClose");
 
-    // Add modal refs
     const addModal   = document.getElementById("addModal");
     const fName      = document.getElementById("f-name");
     const fType      = document.getElementById("f-type");
@@ -297,33 +266,25 @@
     const btnSave    = document.getElementById("btnSave");
     const coordsNote = document.getElementById("coordsNote");
 
-    // Edit modal refs
     const editModal  = document.getElementById("editModal");
     const editBody   = document.getElementById("editBody");
     const editCancel = document.getElementById("editCancel");
     const editSave   = document.getElementById("editSave");
     let editingEntry = null;
 
-    // ===== Config =====
+    // ===== Config & State =====
     const LOCAL_EDIT_PASSWORD = "D8D8D8";
     const MAP_CANDIDATES = ["map.jpg","map.jpeg","map.png"];
     const REPO_OWNER = "equestrix";
     const REPO_NAME  = "Apartment-Map";
 
-    // ===== State =====
     let unlocked = false;
     let map, currentIconSize = 32;
-
-    // Marker storage + per-type groups (no clustering)
     const markers = new Map(); // id -> {data, _marker}
     const groups = {
-      apartment: L.layerGroup(),
-      penthouse: L.layerGroup(),
-      office:    L.layerGroup(),
-      motel:     L.layerGroup()
+      apartment: L.layerGroup(), penthouse: L.layerGroup(),
+      office: L.layerGroup(), motel: L.layerGroup()
     };
-
-    // track latest updatedAt for Statistics
     let latestUpdatedAtMillis = 0;
 
     function toast(m){ hintEl.textContent = m; }
@@ -331,69 +292,51 @@
     function iconFor(entry, size){
       const t = (entry.type || "apartment").toLowerCase();
       const files = {
-        apartment: "house-apartment.png", /* white */
-        penthouse: "house-penthouse.png", /* green */
-        office:    "house-office.png",    /* blue */
-        motel:     "house-motel.png"      /* red */
+        apartment: "house-apartment.png",
+        penthouse: "house-penthouse.png",
+        office:    "house-office.png",
+        motel:     "house-motel.png"
       };
       const s = size || currentIconSize;
-      return L.icon({
-        iconUrl: files[t] || files.apartment,
-        iconSize: [s, s],
-        iconAnchor: [s/2, s/2],
-        tooltipAnchor: [0, -s/2]
-      });
+      return L.icon({ iconUrl: files[t] || files.apartment, iconSize:[s,s], iconAnchor:[s/2,s/2], tooltipAnchor:[0,-s/2] });
     }
 
     function entryLinks(entry){
       if (entry && entry.links && entry.links.length) return entry.links;
       const arr = [];
-      if (entry && entry.shabby) arr.push({ label: "Shabby Apartment", url: entry.shabby });
-      if (entry && entry.nice)   arr.push({ label: "Nice Apartment",   url: entry.nice });
+      if (entry && entry.shabby) arr.push({ label:"Shabby Apartment", url:entry.shabby });
+      if (entry && entry.nice)   arr.push({ label:"Nice Apartment",   url:entry.nice });
       return arr;
     }
 
     function renderLinksHTML(entry){
       const t = (entry.type || "apartment").toLowerCase();
       const links = entryLinks(entry);
-      if (t === "apartment") {
-        var shabby = null, nice = null;
-        for (var i=0;i<links.length;i++){
-          if (!shabby && links[i].label && /shabby/i.test(links[i].label)) shabby = links[i];
-          if (!nice && links[i].label && /nice/i.test(links[i].label))     nice   = links[i];
-        }
-        return (shabby ? '<p><a href="'+shabby.url+'" target="_blank" rel="noopener">Shabby Apartment</a></p>' : '') +
-               (nice   ? '<p><a href="'+nice.url+'"   target="_blank" rel="noopener">Nice Apartment</a></p>'   : '');
+      if (t === "apartment"){
+        let shabby=null, nice=null;
+        for (let i=0;i<links.length;i++){ if (!shabby && /shabby/i.test(links[i].label)) shabby=links[i]; if (!nice && /nice/i.test(links[i].label)) nice=links[i]; }
+        return (shabby?`<p><a href="${shabby.url}" target="_blank" rel="noopener">Shabby Apartment</a></p>`:"") +
+               (nice?  `<p><a href="${nice.url}"   target="_blank" rel="noopener">Nice Apartment</a></p>`  :"");
       }
-      if (t === "office") {
-        var link = links[0];
-        return link ? '<p><a href="'+link.url+'" target="_blank" rel="noopener">Office</a></p>' : '';
+      if (t === "office"){
+        const link = links[0]; return link?`<p><a href="${link.url}" target="_blank" rel="noopener">Office</a></p>`:"";
       }
-      if (t === "motel") {
-        var mlink = links[0];
-        var note = '<div style="color:#d60000;font-weight:700;margin-top:6px">Don’t use this link in your listing, you need a door photo!</div>';
-        return (mlink ? '<p><a href="'+mlink.url+'" target="_blank" rel="noopener">Album</a></p>' : '') + note;
+      if (t === "motel"){
+        const link = links[0];
+        const note = '<div style="color:#d60000;font-weight:700;margin-top:6px">Don’t use this link in your listing, you need a door photo!</div>';
+        return (link?`<p><a href="${link.url}" target="_blank" rel="noopener">Album</a></p>`:"")+note;
       }
-      if (t === "penthouse") {
-        var html = "";
-        for (var j=0;j<links.length;j++){
-          var Lk = links[j];
-          html += '<p><a href="'+(Lk.url||'')+'" target="_blank" rel="noopener">'+(Lk.label||"Album")+'</a></p>';
-        }
+      if (t === "penthouse"){
+        let html=""; for (let j=0;j<links.length;j++){ const Lk=links[j]; html += `<p><a href="${Lk.url||''}" target="_blank" rel="noopener">${Lk.label||"Album"}</a></p>`; }
         return html;
       }
-      // default
-      var out = "";
-      for (var k=0;k<links.length;k++){
-        var lk = links[k];
-        out += '<p><a href="'+(lk.url||'')+'" target="_blank" rel="noopener">'+(lk.label||"Link")+'</a></p>';
-      }
+      let out=""; for (let k=0;k<links.length;k++){ const lk=links[k]; out += `<p><a href="${lk.url||''}" target="_blank" rel="noopener">${lk.label||"Link"}</a></p>`; }
       return out;
     }
 
     function applyEditMode(){
-      var canEdit = unlocked && editModeEl.checked;
-      markers.forEach(function(m){
+      const canEdit = unlocked && editModeEl.checked;
+      markers.forEach(m => {
         if (m._marker) {
           if (canEdit && m._marker.dragging) m._marker.dragging.enable();
           else if (m._marker.dragging) m._marker.dragging.disable();
@@ -407,36 +350,36 @@
       unlocked = !lock;
       document.getElementById("unlockBtn").style.display = lock ? "" : "none";
       document.getElementById("lockBtn").style.display   = lock ? "none" : "";
-      addWrap.style.display   = lock ? "none" : "";
-      editWrap.style.display  = lock ? "none" : "";
+      document.getElementById("addWrap").style.display   = lock ? "none" : "";
+      document.getElementById("editWrap").style.display  = lock ? "none" : "";
       if (lock) editModeEl.checked = false;
       applyEditMode();
       toast(lock ? "Locked (view-only)" : "Edit unlocked");
     }
 
     function setMarkerPopup(entry){
-      var html =
-        '<div class="popup">' +
-          '<h3>'+(entry.name || "Property")+'</h3>' +
-          '<p><strong>Type:</strong> '+(entry.type || "apartment")+'</p>' +
-          renderLinksHTML(entry) +
-          '<small>Coords: x='+entry.x.toFixed(1)+', y='+entry.y.toFixed(1)+'</small>' +
-          ((unlocked && editModeEl.checked) ?
-            '<div style="margin-top:6px;display:flex;gap:8px">' +
-              '<button class="btn" data-action="edit" style="padding:4px 8px;background:#eee;border-radius:6px">Edit</button>' +
-              '<button class="btn" data-action="delete" style="padding:4px 8px;background:#eee;border-radius:6px">Delete</button>' +
-            '</div>' : '') +
-        '</div>';
+      const html =
+        `<div class="popup">
+          <h3>${entry.name || "Property"}</h3>
+          <p><strong>Type:</strong> ${entry.type || "apartment"}</p>
+          ${renderLinksHTML(entry)}
+          <small>Coords: x=${entry.x.toFixed(1)}, y=${entry.y.toFixed(1)}</small>
+          ${ (unlocked && editModeEl.checked)
+              ? '<div style="margin-top:6px;display:flex;gap:8px">' +
+                  '<button class="btn" data-action="edit" style="padding:4px 8px;background:#eee;border-radius:6px">Edit</button>' +
+                  '<button class="btn" data-action="delete" style="padding:4px 8px;background:#eee;border-radius:6px">Delete</button>' +
+                '</div>'
+              : '' }
+        </div>`;
       entry._marker.bindPopup(html);
 
-      entry._marker.off('popupopen').on('popupopen', function(e){
+      entry._marker.off('popupopen').on('popupopen', (e) => {
         if (!(unlocked && editModeEl.checked)) return;
-        var el = e.popup.getElement(); if (!el) return;
-        var editBtn = el.querySelector('[data-action="edit"]');
-        var delBtn  = el.querySelector('[data-action="delete"]');
-
-        if (editBtn) editBtn.addEventListener('click', function(){ openEditModal(entry); });
-        if (delBtn) delBtn.addEventListener('click', async function(){
+        const el = e.popup.getElement(); if (!el) return;
+        const editBtn = el.querySelector('[data-action="edit"]');
+        const delBtn  = el.querySelector('[data-action="delete"]');
+        if (editBtn) editBtn.addEventListener('click', () => openEditModal(entry));
+        if (delBtn) delBtn.addEventListener('click', async () => {
           if (!confirm("Delete this marker?")) return;
           await deleteDoc(doc(db, "markers", entry.id));
         });
@@ -444,7 +387,7 @@
     }
 
     function layerFor(type){
-      var t = (type || "apartment").toLowerCase();
+      const t = (type || "apartment").toLowerCase();
       if (t === "penthouse") return groups.penthouse;
       if (t === "office")    return groups.office;
       if (t === "motel")     return groups.motel;
@@ -452,51 +395,28 @@
     }
 
     function createOrUpdateMarker(entry){
-      var m = markers.get(entry.id);
-      var t = (entry.type || "apartment").toLowerCase();
+      let m = markers.get(entry.id);
+      const t = (entry.type || "apartment").toLowerCase();
       if (!m) {
-        m = {
-          id: entry.id,
-          name: entry.name,
-          x: entry.x,
-          y: entry.y,
-          type: entry.type || "apartment",
-          links: entry.links || [],
-          shabby: entry.shabby || "",
-          nice: entry.nice || "",
-          updatedAt: entry.updatedAt || 0
-        };
+        m = { id: entry.id, name: entry.name, x: entry.x, y: entry.y, type: entry.type || "apartment",
+              links: entry.links || [], shabby: entry.shabby || "", nice: entry.nice || "", updatedAt: entry.updatedAt || 0 };
         m._marker = L.marker([m.y, m.x], {
-          draggable: !!(unlocked && editModeEl.checked),
-          autoPan: true,
-          icon: iconFor(m)
-        })
-        .bindTooltip(m.name || "Property", {direction:"top", offset:[0,-10]});
+          draggable: !!(unlocked && editModeEl.checked), autoPan: true, icon: iconFor(m)
+        }).bindTooltip(m.name || "Property", {direction:"top", offset:[0,-10]});
         layerFor(t).addLayer(m._marker);
         markers.set(entry.id, m);
         setMarkerPopup(m);
-
-        m._marker.on('dragend', async function(e){
-          var pos = e.target.getLatLng();
+        m._marker.on('dragend', async (e) => {
+          const pos = e.target.getLatLng();
           await updateDoc(doc(db, "markers", m.id), { y: pos.lat, x: pos.lng, updatedAt: serverTimestamp() });
         });
       } else {
-        var oldType = (m.type || "apartment").toLowerCase();
-        if (oldType !== t && m._marker){
-          layerFor(oldType).removeLayer(m._marker);
-          layerFor(t).addLayer(m._marker);
-        }
-        m.name = entry.name;
-        m.x = entry.x;
-        m.y = entry.y;
-        m.type = entry.type;
-        m.links = entry.links;
-        m.shabby = entry.shabby;
-        m.nice = entry.nice;
-        m.updatedAt = entry.updatedAt || m.updatedAt || 0;
-        if (m._marker) {
-          m._marker.setLatLng([m.y, m.x]);
-          m._marker.setIcon(iconFor(m));
+        const oldType = (m.type || "apartment").toLowerCase();
+        if (oldType !== t && m._marker){ layerFor(oldType).removeLayer(m._marker); layerFor(t).addLayer(m._marker); }
+        m.name = entry.name; m.x = entry.x; m.y = entry.y; m.type = entry.type;
+        m.links = entry.links; m.shabby = entry.shabby; m.nice = entry.nice; m.updatedAt = entry.updatedAt || m.updatedAt || 0;
+        if (m._marker){
+          m._marker.setLatLng([m.y, m.x]); m._marker.setIcon(iconFor(m));
           if (m._marker.setTooltipContent) m._marker.setTooltipContent(m.name || "Property");
           setMarkerPopup(m);
         }
@@ -505,18 +425,13 @@
     }
 
     function removeMarker(id){
-      var m = markers.get(id);
-      if (m && m._marker){
-        var t = (m.type || "apartment").toLowerCase();
-        layerFor(t).removeLayer(m._marker);
-      }
+      const m = markers.get(id);
+      if (m && m._marker){ layerFor(m.type).removeLayer(m._marker); }
       markers.delete(id);
     }
 
-    // ===== Add Modal logic (explicit-close) with unsaved warning + autofocus =====
-    let pendingLatLng = null;
-    let isAddModalOpen = false;
-    let addDirty = false;
+    // ===== Add/Edit modals (with unsaved warnings + autofocus) =====
+    let pendingLatLng = null, isAddModalOpen = false, addDirty = false, editDirty = false;
 
     function buildLinksFields(type){
       linksArea.innerHTML = "";
@@ -531,7 +446,7 @@
       } else if (type === "motel") {
         linksArea.innerHTML = '<label><span>Motel Album URL</span><input id="f-motel" type="url" placeholder="https://imgur.com/a/…"></label>';
       } else if (type === "penthouse") {
-        var wrap = document.createElement("div");
+        const wrap = document.createElement("div");
         wrap.className = "row";
         wrap.innerHTML =
           '<div class="grid-2">' +
@@ -540,17 +455,13 @@
           '</div>' +
           '<div id="ph-rows" class="row"></div>';
         linksArea.appendChild(wrap);
-
-        var phRows = wrap.querySelector("#ph-rows");
-        var fCount = wrap.querySelector("#f-count");
-
+        const phRows = wrap.querySelector("#ph-rows");
+        const fCount = wrap.querySelector("#f-count");
         function renderRows(){
-          var n = parseInt(fCount.value || "1", 10);
-          if (isNaN(n)) n = 1;
-          n = Math.max(1, Math.min(8, n));
+          let n = parseInt(fCount.value||"1",10); if (isNaN(n)) n=1; n=Math.max(1,Math.min(8,n));
           phRows.innerHTML = "";
-          for (var i=0;i<n;i++){
-            var row = document.createElement("div");
+          for (let i=0;i<n;i++){
+            const row = document.createElement("div");
             row.className = "link-row";
             row.innerHTML =
               '<input type="text" class="ph-label" placeholder="Album '+(i+1)+'">' +
@@ -558,198 +469,141 @@
             phRows.appendChild(row);
           }
         }
-        fCount.addEventListener("input", function(){ addDirty = true; renderRows(); });
+        fCount.addEventListener("input", () => { addDirty = true; renderRows(); });
         renderRows();
       }
-      // mark dirty when any input changes
-      linksArea.addEventListener("input", function(){ addDirty = true; }, { once:true });
+      linksArea.addEventListener("input", () => { addDirty = true; }, { once:true });
     }
 
     function openAddModal(latlng){
-      pendingLatLng = latlng;
-      isAddModalOpen = true;
-      addDirty = false;
-      coordsNote.textContent = "Placing at x="+latlng.lng.toFixed(1)+", y="+latlng.lat.toFixed(1);
-      fName.value = "";
-      fType.value = "apartment";
-      buildLinksFields("apartment");
-      addModal.classList.add("show");
-      setTimeout(function(){ fName.focus(); }, 30); // autofocus
+      pendingLatLng = latlng; isAddModalOpen = true; addDirty = false;
+      coordsNote.textContent = `Placing at x=${latlng.lng.toFixed(1)}, y=${latlng.lat.toFixed(1)}`;
+      fName.value = ""; fType.value = "apartment"; buildLinksFields("apartment");
+      addModal.classList.add("show"); setTimeout(() => fName.focus(), 30);
     }
     function closeAddModal(force){
       if (!force && addDirty && (fName.value.trim() || linksArea.querySelector("input")?.value)){
-        var ok = confirm("You have unsaved changes. Close without saving?");
-        if (!ok) return;
+        const ok = confirm("You have unsaved changes. Close without saving?"); if (!ok) return;
       }
       addModal.classList.remove("show");
-      pendingLatLng = null;
-      isAddModalOpen = false;
-      addDirty = false;
+      pendingLatLng = null; isAddModalOpen = false; addDirty = false;
     }
+    btnCancel.addEventListener("click", () => closeAddModal(false));
+    fType.addEventListener("change", e => { addDirty = true; buildLinksFields(e.target.value); });
 
-    btnCancel.addEventListener("click", function(){ closeAddModal(false); });
-    fType.addEventListener("change", function(e){ addDirty = true; buildLinksFields(e.target.value); });
-
-    btnSave.addEventListener("click", async function(){
+    btnSave.addEventListener("click", async () => {
       if (!pendingLatLng) { closeAddModal(true); return; }
-      var name = (fName.value || "").trim();
-      if (!name) { alert("Please enter a name."); return; }
-      var type = fType.value;
-      var lat = pendingLatLng.lat;
-      var lng = pendingLatLng.lng;
-
-      var links = [];
-      var shabby = "", nice = "";
+      const name = (fName.value||"").trim(); if (!name){ alert("Please enter a name."); return; }
+      const type = fType.value, lat = pendingLatLng.lat, lng = pendingLatLng.lng;
+      const links = []; let shabby="", nice="";
       if (type === "apartment"){
-        shabby = (document.getElementById("f-shabby").value || "").trim();
-        nice   = (document.getElementById("f-nice").value   || "").trim();
+        shabby = (document.getElementById("f-shabby").value||"").trim();
+        nice   = (document.getElementById("f-nice").value||"").trim();
         if (shabby) links.push({ label:"Shabby Apartment", url:shabby });
-        if (nice)   links.push({ label:"Nice Apartment",   url:nice });
+        if (nice)   links.push({ label:"Nice Apartment",   url:nice   });
       } else if (type === "office"){
-        var uo = (document.getElementById("f-office").value || "").trim();
+        const uo = (document.getElementById("f-office").value||"").trim();
         if (uo) links.push({ label:"Office", url:uo });
       } else if (type === "motel"){
-        var um = (document.getElementById("f-motel").value || "").trim();
+        const um = (document.getElementById("f-motel").value||"").trim();
         if (um) links.push({ label:"Album", url:um });
       } else if (type === "penthouse"){
-        var rows = linksArea.querySelectorAll(".link-row");
-        for (var i=0;i<rows.length;i++){
-          var label = (rows[i].querySelector(".ph-label").value || ("Album "+(i+1))).trim();
-          var url   = (rows[i].querySelector(".ph-url").value   || "").trim();
-          if (url) links.push({ label: label, url: url });
-        }
+        const rows = linksArea.querySelectorAll(".link-row");
+        rows.forEach((row,i) => {
+          const label = (row.querySelector(".ph-label").value || `Album ${i+1}`).trim();
+          const url   = (row.querySelector(".ph-url").value   || "").trim();
+          if (url) links.push({ label, url });
+        });
       }
-
-      await addDoc(collection(db, "markers"), {
-        name: name,
-        type: type,
-        links: links,
-        x: lng,
-        y: lat,
-        shabby: (type === "apartment") ? (shabby || "") : "",
-        nice:   (type === "apartment") ? (nice   || "") : "",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+      await addDoc(collection(db,"markers"), {
+        name, type, links, x: lng, y: lat,
+        shabby: (type==="apartment") ? (shabby||"") : "",
+        nice:   (type==="apartment") ? (nice  ||"") : "",
+        createdAt: serverTimestamp(), updatedAt: serverTimestamp()
       });
-
-      closeAddModal(true);
-      toast("Property added.");
+      closeAddModal(true); toast("Property added.");
     });
 
-    // ===== Edit modal (unsaved warn + autofocus) =====
-    let editDirty = false;
-
     function buildEditFields(type, entry){
-      editBody.innerHTML = "";
-      editDirty = false;
-
-      var nameRow = document.createElement("div");
+      editBody.innerHTML = ""; editDirty = false;
+      const nameRow = document.createElement("div");
       nameRow.className = "row";
-      nameRow.innerHTML = '<label><span>Name</span><input id="e-name" type="text" value="'+(entry.name||"")+'"></label>';
+      nameRow.innerHTML = `<label><span>Name</span><input id="e-name" type="text" value="${entry.name||""}"></label>`;
       editBody.appendChild(nameRow);
 
-      var typeRow = document.createElement("div");
+      const typeRow = document.createElement("div");
       typeRow.className = "row";
       typeRow.innerHTML =
         '<label><span>Type</span>' +
           '<select id="e-type">' +
-            '<option value="apartment" '+(entry.type==="apartment"?'selected':'')+'>Apartment</option>' +
-            '<option value="office" '+(entry.type==="office"?'selected':'')+'>Office</option>' +
-            '<option value="motel" '+(entry.type==="motel"?'selected':'')+'>Motel</option>' +
-            '<option value="penthouse" '+(entry.type==="penthouse"?'selected':'')+'>Penthouse</option>' +
+            `<option value="apartment" ${entry.type==="apartment"?'selected':''}>Apartment</option>` +
+            `<option value="office" ${entry.type==="office"?'selected':''}>Office</option>` +
+            `<option value="motel" ${entry.type==="motel"?'selected':''}>Motel</option>` +
+            `<option value="penthouse" ${entry.type==="penthouse"?'selected':''}>Penthouse</option>` +
           '</select>' +
         '</label>';
       editBody.appendChild(typeRow);
 
-      var linksWrap = document.createElement("div");
-      linksWrap.id = "e-links";
-      linksWrap.className = "row";
-      editBody.appendChild(linksWrap);
+      const linksWrap = document.createElement("div"); linksWrap.id="e-links"; linksWrap.className="row"; editBody.appendChild(linksWrap);
+      const links = (entry.links && entry.links.slice) ? entry.links.slice() : entryLinks(entry).slice();
 
-      var links = (entry.links && entry.links.slice) ? entry.links.slice() : entryLinks(entry).slice();
-
-      if (type === "apartment"){
-        var shabby = "";
-        var nice = "";
-        for (var i=0;i<links.length;i++){
-          if (links[i].label && /shabby/i.test(links[i].label)) shabby = links[i].url;
-          if (links[i].label && /nice/i.test(links[i].label))   nice   = links[i].url;
-        }
-        if (!shabby) shabby = entry.shabby || "";
-        if (!nice)   nice   = entry.nice   || "";
+      if (type==="apartment"){
+        let shabby="", nice="";
+        for (let i=0;i<links.length;i++){ if (/shabby/i.test(links[i].label)) shabby=links[i].url; if (/nice/i.test(links[i].label)) nice=links[i].url; }
+        if (!shabby) shabby = entry.shabby || ""; if (!nice) nice = entry.nice || "";
         linksWrap.innerHTML =
           '<div class="grid-2">' +
-            '<label><span>Shabby Apartment URL</span><input id="e-shabby" type="url" value="'+shabby+'"></label>' +
-            '<label><span>Nice Apartment URL</span><input id="e-nice" type="url" value="'+nice+'"></label>' +
+            `<label><span>Shabby Apartment URL</span><input id="e-shabby" type="url" value="${shabby}"></label>` +
+            `<label><span>Nice Apartment URL</span><input id="e-nice" type="url" value="${nice}"></label>` +
           '</div>';
-      } else if (type === "office") {
-        var urlO = (links[0] && links[0].url) ? links[0].url : "";
-        linksWrap.innerHTML = '<label><span>Office URL</span><input id="e-office" type="url" value="'+urlO+'"></label>';
-      } else if (type === "motel") {
-        var urlM = (links[0] && links[0].url) ? links[0].url : "";
-        linksWrap.innerHTML = '<label><span>Motel Album URL</span><input id="e-motel" type="url" value="'+urlM+'"></label>';
-      } else if (type === "penthouse") {
-        var wrap = document.createElement("div");
-        wrap.className = "row";
-        var count = links.length > 0 ? links.length : 1;
-        if (count < 1) count = 1;
-        if (count > 8) count = 8;
+      } else if (type==="office"){
+        const urlO = (links[0] && links[0].url) ? links[0].url : "";
+        linksWrap.innerHTML = `<label><span>Office URL</span><input id="e-office" type="url" value="${urlO}"></label>`;
+      } else if (type==="motel"){
+        const urlM = (links[0] && links[0].url) ? links[0].url : "";
+        linksWrap.innerHTML = `<label><span>Motel Album URL</span><input id="e-motel" type="url" value="${urlM}"></label>`;
+      } else if (type==="penthouse"){
+        const wrap = document.createElement("div"); wrap.className="row";
+        let count = links.length>0 ? links.length : 1; count=Math.min(Math.max(count,1),8);
         wrap.innerHTML =
           '<div class="grid-2">' +
-            '<label><span>Number of links (1–8)</span><input id="e-count" type="number" value="'+count+'" min="1" max="8"></label>' +
+            `<label><span>Number of links (1–8)</span><input id="e-count" type="number" value="${count}" min="1" max="8"></label>` +
             '<div class="row"><span class="muted">Each link can have a custom label.</span></div>' +
           '</div>' +
           '<div id="e-phrows" class="row"></div>';
         linksWrap.appendChild(wrap);
-
-        var rows = wrap.querySelector("#e-phrows");
-        var eCount = wrap.querySelector("#e-count");
-
+        const rows = wrap.querySelector("#e-phrows"); const eCount = wrap.querySelector("#e-count");
         function draw(n){
           rows.innerHTML = "";
-          for(var i=0;i<n;i++){
-            var Lk = links[i] || {};
-            var row = document.createElement("div");
+          for (let i=0;i<n;i++){
+            const Lk = links[i] || {};
+            const row = document.createElement("div");
             row.className = "link-row";
             row.innerHTML =
-              '<input type="text" class="e-label" value="'+(Lk.label || ('Album '+(i+1)))+'">' +
-              '<input type="url"  class="e-url"   value="'+(Lk.url   || '')+'">';
+              `<input type="text" class="e-label" value="${Lk.label || ('Album '+(i+1))}">` +
+              `<input type="url"  class="e-url"   value="${Lk.url   || ''}">`;
             rows.appendChild(row);
           }
         }
         draw(count);
-        eCount.addEventListener("input", function(){
+        eCount.addEventListener("input", () => {
           editDirty = true;
-          var n = parseInt(eCount.value || "1", 10);
-          if (isNaN(n)) n = 1;
-          if (n < 1) n = 1;
-          if (n > 8) n = 8;
+          let n = parseInt(eCount.value||"1",10); if (isNaN(n)) n=1; n=Math.min(Math.max(n,1),8);
           draw(n);
         });
       }
-
-      // mark dirty on any input
-      editBody.addEventListener("input", function(){ editDirty = true; }, { once:true });
-      // autofocus first field
-      setTimeout(function(){
-        var first = document.getElementById("e-name");
-        if (first) first.focus();
-      }, 30);
+      editBody.addEventListener("input", () => { editDirty = true; }, { once:true });
+      setTimeout(() => { const first = document.getElementById("e-name"); if (first) first.focus(); }, 30);
     }
 
     function openEditModal(entry){
       editingEntry = {
-        id: entry.id,
-        name: entry.name,
-        type: entry.type || "apartment",
+        id: entry.id, name: entry.name, type: entry.type || "apartment",
         links: (entry.links && entry.links.slice) ? entry.links.slice() : entryLinks(entry).slice(),
-        shabby: entry.shabby || "",
-        nice: entry.nice || ""
+        shabby: entry.shabby || "", nice: entry.nice || ""
       };
       buildEditFields(editingEntry.type, editingEntry);
       editModal.classList.add("show");
-
-      // handle type change
       function onTypeChange(e){
         if (e && e.target && e.target.id === "e-type"){
           buildEditFields(e.target.value, editingEntry);
@@ -759,291 +613,287 @@
       editBody.addEventListener("change", onTypeChange, { once:true });
     }
 
-    editCancel.addEventListener("click", function(){
+    editCancel.addEventListener("click", () => {
       if (editDirty){
-        var ok = confirm("You have unsaved changes. Close without saving?");
-        if (!ok) return;
+        const ok = confirm("You have unsaved changes. Close without saving?"); if (!ok) return;
       }
-      editModal.classList.remove("show");
-      editingEntry=null;
-      editDirty=false;
+      editModal.classList.remove("show"); editingEntry=null; editDirty=false;
     });
 
-    editSave.addEventListener("click", async function(){
+    editSave.addEventListener("click", async () => {
       if (!editingEntry) return;
-      var name = (document.getElementById("e-name").value || "").trim();
-      var type = document.getElementById("e-type").value;
-
-      var links = [];
-      var shabby = "", nice = "";
-      if (type === "apartment"){
-        shabby = (document.getElementById("e-shabby").value || "").trim();
-        nice   = (document.getElementById("e-nice").value   || "").trim();
+      const name = (document.getElementById("e-name").value || "").trim();
+      const type = document.getElementById("e-type").value;
+      const links = []; let shabby="", nice="";
+      if (type==="apartment"){
+        shabby = (document.getElementById("e-shabby").value||"").trim();
+        nice   = (document.getElementById("e-nice").value||"").trim();
         if (shabby) links.push({ label:"Shabby Apartment", url:shabby });
-        if (nice)   links.push({ label:"Nice Apartment",   url:nice });
-      } else if (type === "office"){
-        var uo = (document.getElementById("e-office").value || "").trim();
+        if (nice)   links.push({ label:"Nice Apartment",   url:nice   });
+      } else if (type==="office"){
+        const uo = (document.getElementById("e-office").value||"").trim();
         if (uo) links.push({ label:"Office", url:uo });
-      } else if (type === "motel"){
-        var um = (document.getElementById("e-motel").value || "").trim();
+      } else if (type==="motel"){
+        const um = (document.getElementById("e-motel").value||"").trim();
         if (um) links.push({ label:"Album", url:um });
-      } else if (type === "penthouse"){
-        var rows = editBody.querySelectorAll("#e-phrows .link-row");
-        for (var i=0;i<rows.length;i++){
-          var label = (rows[i].querySelector(".e-label").value || ("Album "+(i+1))).trim();
-          var url   = (rows[i].querySelector(".e-url").value   || "").trim();
-          if (url) links.push({ label: label, url: url });
-        }
+      } else if (type==="penthouse"){
+        const rows = editBody.querySelectorAll("#e-phrows .link-row");
+        rows.forEach((row,i) => {
+          const label = (row.querySelector(".e-label").value || `Album ${i+1}`).trim();
+          const url   = (row.querySelector(".e-url").value   || "").trim();
+          if (url) links.push({ label, url });
+        });
       }
-
       await updateDoc(doc(db,"markers",editingEntry.id),{
-        name: name,
-        type: type,
-        links: links,
-        shabby: (type==="apartment") ? (shabby || "") : "",
-        nice:   (type==="apartment") ? (nice   || "") : "",
+        name, type, links,
+        shabby: (type==="apartment") ? (shabby||"") : "",
+        nice:   (type==="apartment") ? (nice  ||"") : "",
         updatedAt: serverTimestamp()
       });
-      editModal.classList.remove("show");
-      editingEntry=null;
-      editDirty=false;
+      editModal.classList.remove("show"); editingEntry=null; editDirty=false;
     });
 
     // ===== Statistics =====
-    function formatLastUpdated(ms){
-      if (!ms) return "—";
-      try { return new Date(ms).toLocaleString(); } catch(e){ return "—"; }
-    }
-
+    function formatLastUpdated(ms){ if (!ms) return "—"; try { return new Date(ms).toLocaleString(); } catch{ return "—"; } }
     function renderStats(){
-      var counts = { total: 0, apartment: 0, penthouse: 0, office: 0, motel: 0 };
-      markers.forEach(function(m){
-        counts.total++;
-        var t = (m.type || "apartment").toLowerCase();
-        if (t === "apartment") counts.apartment++;
-        else if (t === "penthouse") counts.penthouse++;
-        else if (t === "office") counts.office++;
-        else if (t === "motel") counts.motel++;
-      });
-      var last = formatLastUpdated(latestUpdatedAtMillis);
+      const counts = { total:0, apartment:0, penthouse:0, office:0, motel:0 };
+      markers.forEach(m => { counts.total++; const t=(m.type||"apartment").toLowerCase(); counts[t] = (counts[t]||0)+1; });
+      const last = formatLastUpdated(latestUpdatedAtMillis);
       statBody.innerHTML =
-        '<div style="padding:14px">' +
-          '<p><strong>Total properties:</strong> '+counts.total+'</p>' +
-          '<p>Apartments: '+counts.apartment+'</p>' +
-          '<p>Penthouses: '+counts.penthouse+'</p>' +
-          '<p>Offices: '+counts.office+'</p>' +
-          '<p>Motels: '+counts.motel+'</p>' +
-          '<hr style="border:none;border-top:1px solid #c6dec0;margin:10px 0">' +
-          '<p><strong>Last updated:</strong> '+last+'</p>' +
-        '</div>';
+        `<div style="padding:14px">
+          <p><strong>Total properties:</strong> ${counts.total}</p>
+          <p>Apartments: ${counts.apartment||0}</p>
+          <p>Penthouses: ${counts.penthouse||0}</p>
+          <p>Offices: ${counts.office||0}</p>
+          <p>Motels: ${counts.motel||0}</p>
+          <hr style="border:none;border-top:1px solid #c6dec0;margin:10px 0">
+          <p><strong>Last updated:</strong> ${last}</p>
+        </div>`;
     }
 
-    // ===== Map + data =====
+    // ===== Map =====
     function init(imageUrl, w, h){
       mapEl.style.display = "block";
-
-      var bounds = [[0,0],[h,w]];
-      var mapOpts = { crs: L.CRS.Simple, minZoom: -2, maxZoom: 5, zoomControl: true, attributionControl: false };
-      map = L.map("map", mapOpts);
+      const bounds = [[0,0],[h,w]];
+      map = L.map("map", { crs:L.CRS.Simple, minZoom:-2, maxZoom:5, zoomControl:true, attributionControl:false });
       L.imageOverlay(imageUrl, bounds).addTo(map);
       map.fitBounds(bounds);
+      groups.apartment.addTo(map); groups.penthouse.addTo(map); groups.office.addTo(map); groups.motel.addTo(map);
 
-      // Add per-type groups to map
-      groups.apartment.addTo(map);
-      groups.penthouse.addTo(map);
-      groups.office.addTo(map);
-      groups.motel.addTo(map);
-
-      // Scale icons with zoom (min 16, max 48)
-      map.on("zoomend", function(){
-        var z = map.getZoom();
+      map.on("zoomend", () => {
+        const z = map.getZoom();
         currentIconSize = Math.max(16, Math.min(48, z * 4));
-        markers.forEach(function(m){ if (m._marker) m._marker.setIcon(iconFor(m)); });
+        markers.forEach(m => { if (m._marker) m._marker.setIcon(iconFor(m)); });
       });
 
-      // Add marker (only when unlocked + add mode)
-      map.on("click", function(e){
-        if (isAddModalOpen) return; // keep modal open until Save/Cancel
+      map.on("click", (e) => {
+        if (isAddModalOpen) return;
         if (!(unlocked && addModeEl.checked)) return;
         openAddModal(e.latlng);
       });
 
       setLockedUI(true);
+      wireData(); // after map is ready
+    }
 
-      var colRef = collection(db, "markers");
-      onSnapshot(colRef, function(snap){
-        var seen = new Set();
-        // reset last updated; recompute from snapshot to be robust
-        latestUpdatedAtMillis = 0;
+    // ===== FAST FIRST LOAD: cache-first, then incremental live updates =====
+    const _addQueue = [];
+    let _flushing = false;
+    function enqueueInitial(entry){
+      _addQueue.push(entry);
+      if (_flushing) return;
+      _flushing = true;
+      requestAnimationFrame(function flush(){
+        let n = 0;
+        while (_addQueue.length && n < 300){
+          createOrUpdateMarker(_addQueue.shift());
+          n++;
+        }
+        if (_addQueue.length) requestAnimationFrame(flush);
+        else _flushing = false;
+      });
+    }
 
-        snap.forEach(function(d){
-          var v = d.data();
-          var ms = 0;
-          // Firestore timestamps may be objects; handle seconds/nanoseconds or Date
-          if (v && v.updatedAt){
-            try {
-              if (typeof v.updatedAt.toDate === "function") {
-                ms = v.updatedAt.toDate().getTime();
-              } else if (v.updatedAt.seconds){
-                ms = (v.updatedAt.seconds*1000) + Math.floor((v.updatedAt.nanoseconds||0)/1e6);
-              } else if (v.updatedAt instanceof Date){
-                ms = v.updatedAt.getTime();
+    async function wireData(){
+      const colRef = collection(db, "markers");
+
+      // 1) Try cached docs (instant warm loads)
+      try {
+        const cached = await getDocsFromCache(colRef);
+        if (!cached.empty){
+          console.log("[fs] rendered from cache:", cached.size);
+          const seen = new Set(); latestUpdatedAtMillis = 0;
+          cached.forEach((d) => {
+            const v = d.data() || {};
+            let ms = 0;
+            if (v.updatedAt){
+              try {
+                if (typeof v.updatedAt.toDate === "function") ms = v.updatedAt.toDate().getTime();
+                else if (v.updatedAt.seconds) ms = v.updatedAt.seconds*1000 + Math.floor((v.updatedAt.nanoseconds||0)/1e6);
+              } catch {}
+            }
+            enqueueInitial({
+              id: d.id, name: v.name || "Property", x: v.x, y: v.y, type: v.type || "apartment",
+              links: Array.isArray(v.links) ? v.links : [], shabby: v.shabby || "", nice: v.nice || "", updatedAt: ms
+            });
+            if (ms && ms > latestUpdatedAtMillis) latestUpdatedAtMillis = ms;
+            seen.add(d.id);
+          });
+          statusEl.textContent = "Loaded " + markers.size + " properties (cache)";
+          hintEl.textContent = "Syncing…";
+          map.fire("zoomend");
+        }
+      } catch { /* first visit: no cache; ignore */ }
+
+      // 2) If nothing was shown yet, optionally prefetch from server once
+      if (markers.size === 0){
+        try {
+          const serverSnap = await getDocsFromServer(colRef);
+          if (!serverSnap.empty){
+            serverSnap.forEach((d) => {
+              const v = d.data() || {};
+              let ms = 0;
+              if (v.updatedAt){
+                try {
+                  if (typeof v.updatedAt.toDate === "function") ms = v.updatedAt.toDate().getTime();
+                  else if (v.updatedAt.seconds) ms = v.updatedAt.seconds*1000 + Math.floor((v.updatedAt.nanoseconds||0)/1e6);
+                } catch {}
               }
-            } catch(e){}
+              enqueueInitial({
+                id: d.id, name: v.name || "Property", x: v.x, y: v.y, type: v.type || "apartment",
+                links: Array.isArray(v.links) ? v.links : [], shabby: v.shabby || "", nice: v.nice || "", updatedAt: ms
+              });
+              if (ms && ms > latestUpdatedAtMillis) latestUpdatedAtMillis = ms;
+            });
+            statusEl.textContent = "Loaded " + markers.size + " properties (server)";
+            hintEl.textContent = "Ready";
+            map.fire("zoomend");
           }
-          var entry = {
-            id: d.id,
-            name: (v && v.name) ? v.name : "Property",
-            x: v && v.x,
-            y: v && v.y,
-            type: (v && v.type) ? v.type : "apartment",
-            links: (v && v.links && v.links.slice) ? v.links : [],
-            shabby: (v && v.shabby) ? v.shabby : "",
-            nice:   (v && v.nice)   ? v.nice   : "",
-            updatedAt: ms
-          };
-          if (ms && ms > latestUpdatedAtMillis) latestUpdatedAtMillis = ms;
-          createOrUpdateMarker(entry);
-          seen.add(d.id);
-        });
-        // Remove stale
-        Array.from(markers.keys()).forEach(function(id){
-          if (!seen.has(id)) removeMarker(id);
-        });
-        // Update badges
-        if (statModal.classList.contains("show")) renderStats();
-        statusEl.textContent = "Loaded " + markers.size + " properties";
-        hintEl.textContent = "Ready";
-        // Sync icon size initially
-        map.fire("zoomend");
-      });
-
-      // Unlock/Lock
-      unlockBtn.addEventListener("click", async function(){
-        var pass = prompt("Password:");
-        if (pass !== LOCAL_EDIT_PASSWORD) { alert("Wrong password."); return; }
-        await signInAnonymously(auth);
-        setLockedUI(false);
-      });
-      lockBtn.addEventListener("click", async function(){
-        await signOut(auth);
-        setLockedUI(true);
-      });
-
-      editModeEl.addEventListener("change", applyEditMode);
-    }
-
-    // Image loader
-    function tryLoadImage(i){
-      var idx = (typeof i === "number") ? i : 0;
-      if (idx >= MAP_CANDIDATES.length){
-        statusEl.textContent = "Could not find map.jpg/jpeg/png next to index.html.";
-        console.warn("[map] no candidates worked");
-        return;
+        } catch(e){ console.warn("[fs] server prefetch failed:", e?.message || e); }
       }
-      var src = MAP_CANDIDATES[idx] + "?v=" + Date.now();
-      var img = new Image();
-      img.onload = function(){ init(src, img.naturalWidth, img.naturalHeight); };
-      img.onerror = function(){ tryLoadImage(idx + 1); };
-      img.src = src;
+
+      // 3) Live incremental sync (fast updates via docChanges)
+      onSnapshot(colRef, {
+        includeMetadataChanges: true,
+        next: (snap) => {
+          let changed = false;
+          snap.docChanges().forEach((chg) => {
+            const d = chg.doc, v = d.data() || {};
+            let ms = 0;
+            if (v.updatedAt){
+              try {
+                if (typeof v.updatedAt.toDate === "function") ms = v.updatedAt.toDate().getTime();
+                else if (v.updatedAt.seconds) ms = v.updatedAt.seconds*1000 + Math.floor((v.updatedAt.nanoseconds||0)/1e6);
+              } catch {}
+            }
+            const entry = {
+              id: d.id, name: v.name || "Property", x: v.x, y: v.y, type: v.type || "apartment",
+              links: Array.isArray(v.links) ? v.links : [], shabby: v.shabby || "", nice: v.nice || "", updatedAt: ms
+            };
+            if (chg.type === "added" || chg.type === "modified"){ createOrUpdateMarker(entry); changed = true; }
+            else if (chg.type === "removed"){ removeMarker(d.id); changed = true; }
+            if (ms && ms > latestUpdatedAtMillis) latestUpdatedAtMillis = ms;
+          });
+
+          if (changed){
+            statusEl.textContent = "Loaded " + markers.size + " properties";
+            map.fire("zoomend");
+          }
+          if (!snap.metadata.fromCache){
+            hintEl.textContent = "Ready";
+            console.log("[fs] live sync OK — size:", snap.size);
+          } else {
+            console.log("[fs] snapshot from cache");
+          }
+        },
+        error: (err) => {
+          console.error("[fs] onSnapshot error:", err);
+          statusEl.textContent = "Firestore error: " + (err?.message || err);
+          hintEl.textContent = "Check Firestore rules / auth";
+        }
+      });
     }
 
-    // ===== Settings menu & actions =====
-    settingsBtn.addEventListener("click", function(e){
+    // ===== Settings & actions =====
+    settingsBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      var open = settingsMenu.style.display === "block";
+      const open = settingsMenu.style.display === "block";
       settingsMenu.style.display = open ? "none" : "block";
     });
-    document.addEventListener("click", function(){ settingsMenu.style.display = "none"; });
+    document.addEventListener("click", () => { settingsMenu.style.display = "none"; });
 
-    // Export markers (JSON)
-    menuExport.addEventListener("click", function(){
+    menuExport.addEventListener("click", () => {
       settingsMenu.style.display = "none";
-      var arr = [];
-      markers.forEach(function(m){
-        arr.push({
-          name: m.name,
-          x: m.x,
-          y: m.y,
-          type: m.type,
-          links: m.links,
-          shabby: m.shabby,
-          nice: m.nice
-        });
+      const arr = [];
+      markers.forEach(m => {
+        arr.push({ name:m.name, x:m.x, y:m.y, type:m.type, links:m.links, shabby:m.shabby, nice:m.nice });
       });
-      var blob = new Blob([JSON.stringify(arr, null, 2)], { type: "application/json" });
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement("a");
-      a.href = url;
-      a.download = "markers.json";
-      document.body.appendChild(a);
-      a.click();
-      URL.revokeObjectURL(url);
-      a.remove();
+      const blob = new Blob([JSON.stringify(arr, null, 2)], { type:"application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = "markers.json";
+      document.body.appendChild(a); a.click(); URL.revokeObjectURL(url); a.remove();
     });
 
-    // Statistics
-    menuStats.addEventListener("click", function(){
-      settingsMenu.style.display = "none";
-      renderStats();
-      statModal.classList.add("show");
-    });
-    statClose.addEventListener("click", function(){ statModal.classList.remove("show"); });
+    menuStats.addEventListener("click", () => { settingsMenu.style.display="none"; renderStats(); statModal.classList.add("show"); });
+    statClose.addEventListener("click", () => { statModal.classList.remove("show"); });
 
-    // Changelog
-    menuChangelog.addEventListener("click", function(){
-      settingsMenu.style.display = "none";
-      openChangelog();
-    });
-    chgClose.addEventListener("click", function(){ chgModal.classList.remove("show"); });
-    chgCloseX.addEventListener("click", function(){ chgModal.classList.remove("show"); });
+    menuChangelog.addEventListener("click", () => { settingsMenu.style.display="none"; openChangelog(); });
+    chgClose.addEventListener("click", () => { chgModal.classList.remove("show"); });
+    chgCloseX.addEventListener("click", () => { chgModal.classList.remove("show"); });
 
     function openChangelog(){
       chgBody.innerHTML = '<div style="padding:14px">Loading commits…</div>';
       chgModal.classList.add("show");
-      var cacheKey = "chg_" + REPO_OWNER + "_" + REPO_NAME;
-      var cached = null;
-      try { cached = sessionStorage.getItem(cacheKey); } catch(e) {}
-      if (cached) { chgBody.innerHTML = cached; return; }
-      var url = "https://api.github.com/repos/" + REPO_OWNER + "/" + REPO_NAME + "/commits?per_page=20";
-      fetch(url, { headers: { "Accept": "application/vnd.github+json" } })
-        .then(function(res){
-          if (!res.ok) throw new Error("GitHub API " + res.status);
-          return res.json();
-        })
-        .then(function(commits){
-          var html = "";
-          for (var i=0;i<commits.length;i++){
-            var c = commits[i];
-            var commit = c.commit ? c.commit : {};
-            var authorObj = commit.author ? commit.author : null;
-            var authorName = authorObj && authorObj.name ? authorObj.name : (c.author && c.author.login ? c.author.login : "Unknown");
-            var msg = commit.message ? String(commit.message).trim() : "";
-            var parts = msg.split(/\r?\n/);
-            var title = parts.shift() || "Commit";
-            var body = parts.join("\n").trim();
-            var dstr = (authorObj && authorObj.date) ? authorObj.date : (commit.committer && commit.committer.date ? commit.committer.date : "");
-            var when = "";
-            try { when = dstr ? new Date(dstr).toLocaleString() : ""; } catch(e) { when = ""; }
-
-            html += '' +
-              '<div class="commit" style="padding:12px 14px; border-bottom:1px solid #eee">' +
-                '<h4 style="margin:0 0 6px; font-size:14px">'+escapeHtml(title)+'</h4>' +
-                (body ? '<div class="muted" style="white-space:pre-wrap">'+escapeHtml(body)+'</div>' : '') +
-                '<small class="muted">'+escapeHtml(authorName)+' — '+escapeHtml(when)+'</small>' +
-              '</div>';
+      const cacheKey = "chg_" + REPO_OWNER + "_" + REPO_NAME;
+      let cached=null; try { cached = sessionStorage.getItem(cacheKey); } catch {}
+      if (cached){ chgBody.innerHTML = cached; return; }
+      const url = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits?per_page=20`;
+      fetch(url, { headers: { "Accept":"application/vnd.github+json" } })
+        .then(res => { if (!res.ok) throw new Error("GitHub API "+res.status); return res.json(); })
+        .then(commits => {
+          let html="";
+          for (let i=0;i<commits.length;i++){
+            const c = commits[i], commit=c.commit||{}, authorObj=commit.author||null;
+            const authorName = authorObj?.name || c.author?.login || "Unknown";
+            const msg = (commit.message||"").trim(); const parts = msg.split(/\r?\n/);
+            const title = parts.shift() || "Commit"; const body = parts.join("\n").trim();
+            const dstr = authorObj?.date || commit.committer?.date || ""; let when="";
+            try { when = dstr ? new Date(dstr).toLocaleString() : ""; } catch {}
+            html += `<div class="commit" style="padding:12px 14px; border-bottom:1px solid #eee">
+                      <h4 style="margin:0 0 6px; font-size:14px">${escapeHtml(title)}</h4>
+                      ${ body ? `<div class="muted" style="white-space:pre-wrap">${escapeHtml(body)}</div>` : "" }
+                      <small class="muted">${escapeHtml(authorName)} — ${escapeHtml(when)}</small>
+                     </div>`;
           }
           chgBody.innerHTML = html || '<div style="padding:14px">No recent commits.</div>';
-          try { sessionStorage.setItem(cacheKey, chgBody.innerHTML); } catch(e) {}
+          try { sessionStorage.setItem(cacheKey, chgBody.innerHTML); } catch {}
         })
-        .catch(function(err){
-          chgBody.innerHTML = '<div style="padding:14px;color:#b00020">Failed to load commits: '+escapeHtml(err.message)+'</div>';
-        });
+        .catch(err => { chgBody.innerHTML = `<div style="padding:14px;color:#b00020">Failed to load commits: ${escapeHtml(err.message)}</div>`; });
     }
 
-    function escapeHtml(s){
-      var map = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' };
-      return String(s).replace(/[&<>"]/g, function(c){ return map[c]; });
+    function escapeHtml(s){ const map={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}; return String(s).replace(/[&<>"]/g,c=>map[c]); }
+
+    // ===== Unlock/lock =====
+    document.getElementById("unlockBtn").addEventListener("click", async () => {
+      const pass = prompt("Password:"); if (pass !== LOCAL_EDIT_PASSWORD){ alert("Wrong password."); return; }
+      try { if (!auth.currentUser) await signInAnonymously(auth); } catch {}
+      setLockedUI(false);
+    });
+    document.getElementById("lockBtn").addEventListener("click", async () => { try { await signOut(auth); } catch{} setLockedUI(true); });
+    editModeEl.addEventListener("change", applyEditMode);
+
+    // ===== Image loader =====
+    function tryLoadImage(i){
+      const idx = (typeof i === "number") ? i : 0;
+      if (idx >= MAP_CANDIDATES.length){
+        statusEl.textContent = "Could not find map.jpg/jpeg/png next to index.html.";
+        console.warn("[map] no candidates worked"); return;
+      }
+      const src = MAP_CANDIDATES[idx] + "?v=" + Date.now();
+      const img = new Image();
+      img.onload = () => init(src, img.naturalWidth, img.naturalHeight);
+      img.onerror = () => tryLoadImage(idx + 1);
+      img.src = src;
     }
 
     // Boot
