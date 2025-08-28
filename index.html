@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <style>
     :root{
-      --main: #93c47d;      /* header / brand */
+      --main:#93c47d;       /* header / brand */
       --secondary:#b6d7a8;  /* body */
       --accent:#d9ead3;     /* cards / accents */
       --sea:#0fa8d2;        /* page/map bg */
@@ -40,7 +40,7 @@
       border:none; padding:8px 12px; border-radius:8px; cursor:pointer;
       background:#fff; color:#111; font-weight:700;
     }
-    /* Hover fix: keep text visible, no vanishing */
+    /* Hover fix: keep text visible */
     #toolbar button:hover{ filter:brightness(.97); color:#111; }
 
     /* Status bottom-left */
@@ -167,7 +167,7 @@
       <main>
         <div class="row">
           <label><span>Name</span>
-            <input id="f-name" type="text" placeholder="e.g., Eclipse Towers Apt. 3" />
+            <input id="f-name" type="text" placeholder="e.g., Eclipse Towers Apt. 3">
           </label>
         </div>
 
@@ -240,7 +240,7 @@
     const VERSION = "beta 1.0.6";
     const VERSION_NOTE = "Type clustering, stylized UI, bottom-left status/zoom, hover fix, changelog X";
     document.getElementById("version").textContent = VERSION;
-    console.log(`Dynasty 8 Map — ${VERSION} — ${VERSION_NOTE}`);
+    console.log("Dynasty 8 Map — " + VERSION + " — " + VERSION_NOTE);
 
     // ===== Firebase =====
     const firebaseConfig = {
@@ -252,6 +252,10 @@
       appId: "1:849316207524:web:9c921ad842fc188d027f31",
       measurementId: "G-VXG629H337"
     };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
 
     // ===== DOM refs =====
     const addModeEl  = document.getElementById("addMode");
@@ -272,10 +276,10 @@
     const menuStats     = document.getElementById("menuStats");
 
     // Changelog modal refs
-    const chgModal = document.getElementById("changelogModal");
-    const chgBody  = document.getElementById("chgBody");
-    const chgClose = document.getElementById("chgClose");
-    const chgCloseX= document.getElementById("chgCloseX");
+    const chgModal  = document.getElementById("changelogModal");
+    const chgBody   = document.getElementById("chgBody");
+    const chgClose  = document.getElementById("chgClose");
+    const chgCloseX = document.getElementById("chgCloseX");
 
     // Stats modal refs
     const statModal = document.getElementById("statsModal");
@@ -307,9 +311,6 @@
     // ===== State =====
     let unlocked = false;
     let map, currentIconSize = 32;
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db   = getFirestore(app);
 
     // Marker storage + clusters (by type)
     const markers = new Map(); // id -> {data, _marker}
@@ -317,32 +318,33 @@
       apartment: L.markerClusterGroup({ spiderfyOnMaxZoom:true, showCoverageOnHover:false, disableClusteringAtZoom: 4 }),
       penthouse: L.markerClusterGroup({ spiderfyOnMaxZoom:true, showCoverageOnHover:false, disableClusteringAtZoom: 4 }),
       office:    L.markerClusterGroup({ spiderfyOnMaxZoom:true, showCoverageOnHover:false, disableClusteringAtZoom: 4 }),
-      motel:     L.markerClusterGroup({ spiderfyOnMaxZoom:true, showCoverageOnHover:false, disableClusteringAtZoom: 4 }),
+      motel:     L.markerClusterGroup({ spiderfyOnMaxZoom:true, showCoverageOnHover:false, disableClusteringAtZoom: 4 })
     };
 
-    const toast = (m) => { hintEl.textContent = m; };
+    function toast(m){ hintEl.textContent = m; }
 
-    function iconFor(entry, size = currentIconSize){
-      const type = (entry.type || "apartment").toLowerCase();
+    function iconFor(entry, size){
+      const t = (entry.type || "apartment").toLowerCase();
       const files = {
-        apartment: "house-apartment.png", // white
-        penthouse: "house-penthouse.png", // green
-        office:    "house-office.png",    // blue
-        motel:     "house-motel.png",     // red
+        apartment: "house-apartment.png", /* white */
+        penthouse: "house-penthouse.png", /* green */
+        office:    "house-office.png",    /* blue */
+        motel:     "house-motel.png"      /* red */
       };
+      const s = size || currentIconSize;
       return L.icon({
-        iconUrl: files[type] || files.apartment,
-        iconSize: [size, size],
-        iconAnchor: [size/2, size/2],
-        tooltipAnchor: [0, -size/2]
+        iconUrl: files[t] || files.apartment,
+        iconSize: [s, s],
+        iconAnchor: [s/2, s/2],
+        tooltipAnchor: [0, -s/2]
       });
     }
 
     function entryLinks(entry){
-      if (Array.isArray(entry.links) && entry.links.length) return entry.links;
+      if (entry && entry.links && entry.links.length) return entry.links;
       const arr = [];
-      if (entry.shabby) arr.push({label:"Shabby Apartment", url:entry.shabby});
-      if (entry.nice)   arr.push({label:"Nice Apartment",   url:entry.nice});
+      if (entry && entry.shabby) arr.push({ label: "Shabby Apartment", url: entry.shabby });
+      if (entry && entry.nice)   arr.push({ label: "Nice Apartment",   url: entry.nice });
       return arr;
     }
 
@@ -350,29 +352,46 @@
       const t = (entry.type || "apartment").toLowerCase();
       const links = entryLinks(entry);
       if (t === "apartment") {
-        const shabby = links.find(l => /shabby/i.test(l.label));
-        const nice   = links.find(l => /nice/i.test(l.label));
-        return `${shabby?`<p><a href="${shabby.url}" target="_blank" rel="noopener">Shabby Apartment</a></p>`:""}${nice?`<p><a href="${nice.url}" target="_blank" rel="noopener">Nice Apartment</a></p>`:""}`;
+        var shabby = null, nice = null;
+        for (var i=0;i<links.length;i++){
+          if (!shabby && links[i].label && /shabby/i.test(links[i].label)) shabby = links[i];
+          if (!nice && links[i].label && /nice/i.test(links[i].label))     nice   = links[i];
+        }
+        return (shabby ? '<p><a href="'+shabby.url+'" target="_blank" rel="noopener">Shabby Apartment</a></p>' : '') +
+               (nice   ? '<p><a href="'+nice.url+'"   target="_blank" rel="noopener">Nice Apartment</a></p>'   : '');
       }
       if (t === "office") {
-        const link = links[0]; return link ? `<p><a href="${link.url}" target="_blank" rel="noopener">Office</a></p>` : "";
+        var link = links[0];
+        return link ? '<p><a href="'+link.url+'" target="_blank" rel="noopener">Office</a></p>' : '';
       }
       if (t === "motel") {
-        const link = links[0];
-        const note = `<div style="color:#d60000;font-weight:700;margin-top:6px">Don’t use this link in your listing, you need a door photo!</div>`;
-        return (link ? `<p><a href="${link.url}" target="_blank" rel="noopener">Album</a></p>` : "") + note;
+        var mlink = links[0];
+        var note = '<div style="color:#d60000;font-weight:700;margin-top:6px">Don’t use this link in your listing, you need a door photo!</div>';
+        return (mlink ? '<p><a href="'+mlink.url+'" target="_blank" rel="noopener">Album</a></p>' : '') + note;
       }
       if (t === "penthouse") {
-        return links.map(l => `<p><a href="${l.url}" target="_blank" rel="noopener">${l.label || "Album"}</a></p>`).join("");
+        var html = "";
+        for (var j=0;j<links.length;j++){
+          var Lk = links[j];
+          html += '<p><a href="'+(Lk.url||'')+'" target="_blank" rel="noopener">'+(Lk.label||"Album")+'</a></p>';
+        }
+        return html;
       }
-      return links.map(l => `<p><a href="${l.url}" target="_blank" rel="noopener">${l.label || "Link"}</a></p>`).join("");
+      // default
+      var out = "";
+      for (var k=0;k<links.length;k++){
+        var lk = links[k];
+        out += '<p><a href="'+(lk.url||'')+'" target="_blank" rel="noopener">'+(lk.label||"Link")+'</a></p>';
+      }
+      return out;
     }
 
     function applyEditMode(){
-      const canEdit = unlocked && editModeEl.checked;
-      markers.forEach(m => {
+      var canEdit = unlocked && editModeEl.checked;
+      markers.forEach(function(m){
         if (m._marker) {
-          if (canEdit) m._marker.dragging.enable(); else m._marker.dragging.disable();
+          if (canEdit && m._marker.dragging) m._marker.dragging.enable();
+          else if (m._marker.dragging) m._marker.dragging.disable();
           setMarkerPopup(m);
         }
       });
@@ -391,28 +410,28 @@
     }
 
     function setMarkerPopup(entry){
-      const html = `
-        <div class="popup">
-          <h3>${entry.name || "Property"}</h3>
-          <p><strong>Type:</strong> ${(entry.type || "apartment")}</p>
-          ${renderLinksHTML(entry)}
-          <small>Coords: x=${entry.x.toFixed(1)}, y=${entry.y.toFixed(1)}</small>
-          ${(unlocked && editModeEl.checked) ? `
-          <div style="margin-top:6px;display:flex;gap:8px">
-            <button class="btn" data-action="edit" style="padding:4px 8px;background:#eee;border-radius:6px">Edit</button>
-            <button class="btn" data-action="delete" style="padding:4px 8px;background:#eee;border-radius:6px">Delete</button>
-          </div>` : ``}
-        </div>`;
+      var html =
+        '<div class="popup">' +
+          '<h3>'+(entry.name || "Property")+'</h3>' +
+          '<p><strong>Type:</strong> '+(entry.type || "apartment")+'</p>' +
+          renderLinksHTML(entry) +
+          '<small>Coords: x='+entry.x.toFixed(1)+', y='+entry.y.toFixed(1)+'</small>' +
+          ((unlocked && editModeEl.checked) ?
+            '<div style="margin-top:6px;display:flex;gap:8px">' +
+              '<button class="btn" data-action="edit" style="padding:4px 8px;background:#eee;border-radius:6px">Edit</button>' +
+              '<button class="btn" data-action="delete" style="padding:4px 8px;background:#eee;border-radius:6px">Delete</button>' +
+            '</div>' : '') +
+        '</div>';
       entry._marker.bindPopup(html);
 
-      entry._marker.off('popupopen').on('popupopen', (e) => {
+      entry._marker.off('popupopen').on('popupopen', function(e){
         if (!(unlocked && editModeEl.checked)) return;
-        const el = e.popup.getElement(); if (!el) return;
-        const editBtn = el.querySelector('[data-action="edit"]');
-        const delBtn  = el.querySelector('[data-action="delete"]');
+        var el = e.popup.getElement(); if (!el) return;
+        var editBtn = el.querySelector('[data-action="edit"]');
+        var delBtn  = el.querySelector('[data-action="delete"]');
 
-        if (editBtn) editBtn.addEventListener('click', () => openEditModal(entry));
-        if (delBtn) delBtn.addEventListener('click', async () => {
+        if (editBtn) editBtn.addEventListener('click', function(){ openEditModal(entry); });
+        if (delBtn) delBtn.addEventListener('click', async function(){
           if (!confirm("Delete this marker?")) return;
           await deleteDoc(doc(db, "markers", entry.id));
         });
@@ -420,90 +439,113 @@
     }
 
     function ensureCluster(type){
-      return clusters[type] || clusters.apartment;
+      if (type === "penthouse") return clusters.penthouse;
+      if (type === "office")    return clusters.office;
+      if (type === "motel")     return clusters.motel;
+      return clusters.apartment;
     }
 
     function createOrUpdateMarker(entry){
-      let m = markers.get(entry.id);
-      const t = (entry.type || "apartment").toLowerCase();
+      var m = markers.get(entry.id);
+      var t = (entry.type || "apartment").toLowerCase();
       if (!m) {
-        m = { ...entry };
+        m = {
+          id: entry.id,
+          name: entry.name,
+          x: entry.x,
+          y: entry.y,
+          type: entry.type || "apartment",
+          links: entry.links || [],
+          shabby: entry.shabby || "",
+          nice: entry.nice || ""
+        };
         m._marker = L.marker([m.y, m.x], {
           draggable: !!(unlocked && editModeEl.checked),
           autoPan: true,
-          icon: iconFor(entry)
+          icon: iconFor(m)
         })
-        .bindTooltip(m.name || "Property", {direction: "top", offset: [0,-10]});
+        .bindTooltip(m.name || "Property", {direction:"top", offset:[0,-10]});
         ensureCluster(t).addLayer(m._marker);
         markers.set(entry.id, m);
         setMarkerPopup(m);
 
-        m._marker.on('dragend', async (e) => {
-          const pos = e.target.getLatLng();
+        m._marker.on('dragend', async function(e){
+          var pos = e.target.getLatLng();
           await updateDoc(doc(db, "markers", m.id), { y: pos.lat, x: pos.lng, updatedAt: serverTimestamp() });
         });
       } else {
-        // If type changed, move between clusters
-        const oldType = (m.type || "apartment").toLowerCase();
+        // move cluster if type changed
+        var oldType = (m.type || "apartment").toLowerCase();
         if (oldType !== t && m._marker){
           ensureCluster(oldType).removeLayer(m._marker);
           ensureCluster(t).addLayer(m._marker);
         }
-        m.name = entry.name; m.x = entry.x; m.y = entry.y;
-        m.type = entry.type; m.links = entry.links;
-        m.shabby = entry.shabby; m.nice = entry.nice;
-        m._marker.setLatLng([m.y, m.x]);
-        m._marker.setIcon(iconFor(entry));
-        m._marker.setTooltipContent(m.name || "Property");
-        setMarkerPopup(m);
+        m.name = entry.name;
+        m.x = entry.x;
+        m.y = entry.y;
+        m.type = entry.type;
+        m.links = entry.links;
+        m.shabby = entry.shabby;
+        m.nice = entry.nice;
+        if (m._marker) {
+          m._marker.setLatLng([m.y, m.x]);
+          m._marker.setIcon(iconFor(m));
+          if (m._marker.setTooltipContent) m._marker.setTooltipContent(m.name || "Property");
+          setMarkerPopup(m);
+        }
       }
     }
 
     function removeMarker(id){
-      const m = markers.get(id);
+      var m = markers.get(id);
       if (m && m._marker){
-        const t = (m.type || "apartment").toLowerCase();
+        var t = (m.type || "apartment").toLowerCase();
         ensureCluster(t).removeLayer(m._marker);
       }
       markers.delete(id);
     }
 
     // ===== Add Modal logic (explicit-close) =====
+    let pendingLatLng = null;
+    let isAddModalOpen = false;
+
     function buildLinksFields(type){
       linksArea.innerHTML = "";
       if (type === "apartment") {
-        linksArea.innerHTML = `
-          <div class="grid-2">
-            <label><span>Shabby Apartment URL</span><input id="f-shabby" type="url" placeholder="https://imgur.com/a/…" /></label>
-            <label><span>Nice Apartment URL</span><input id="f-nice" type="url" placeholder="https://imgur.com/a/…" /></label>
-          </div>`;
+        linksArea.innerHTML =
+          '<div class="grid-2">' +
+            '<label><span>Shabby Apartment URL</span><input id="f-shabby" type="url" placeholder="https://imgur.com/a/…"></label>' +
+            '<label><span>Nice Apartment URL</span><input id="f-nice" type="url" placeholder="https://imgur.com/a/…"></label>' +
+          '</div>';
       } else if (type === "office") {
-        linksArea.innerHTML = `<label><span>Office URL</span><input id="f-office" type="url" placeholder="https://imgur.com/a/…" /></label>`;
+        linksArea.innerHTML = '<label><span>Office URL</span><input id="f-office" type="url" placeholder="https://imgur.com/a/…"></label>';
       } else if (type === "motel") {
-        linksArea.innerHTML = `<label><span>Motel Album URL</span><input id="f-motel" type="url" placeholder="https://imgur.com/a/…" /></label>`;
+        linksArea.innerHTML = '<label><span>Motel Album URL</span><input id="f-motel" type="url" placeholder="https://imgur.com/a/…"></label>';
       } else if (type === "penthouse") {
-        const wrap = document.createElement("div");
+        var wrap = document.createElement("div");
         wrap.className = "row";
-        wrap.innerHTML = `
-          <div class="grid-2">
-            <label><span>Number of links (1–8)</span><input id="f-count" type="number" value="1" min="1" max="8"/></label>
-            <div class="row"><span class="muted">Each link can have a custom label.</span></div>
-          </div>
-          <div id="ph-rows" class="row"></div>`;
+        wrap.innerHTML =
+          '<div class="grid-2">' +
+            '<label><span>Number of links (1–8)</span><input id="f-count" type="number" value="1" min="1" max="8"></label>' +
+            '<div class="row"><span class="muted">Each link can have a custom label.</span></div>' +
+          '</div>' +
+          '<div id="ph-rows" class="row"></div>';
         linksArea.appendChild(wrap);
 
-        const phRows = wrap.querySelector("#ph-rows");
-        const fCount = wrap.querySelector("#f-count");
+        var phRows = wrap.querySelector("#ph-rows");
+        var fCount = wrap.querySelector("#f-count");
 
         function renderRows(){
-          const n = Math.max(1, Math.min(8, parseInt(fCount.value || "1", 10)));
+          var n = parseInt(fCount.value || "1", 10);
+          if (isNaN(n)) n = 1;
+          n = Math.max(1, Math.min(8, n));
           phRows.innerHTML = "";
-          for (let i=0;i<n;i++){
-            const row = document.createElement("div");
+          for (var i=0;i<n;i++){
+            var row = document.createElement("div");
             row.className = "link-row";
-            row.innerHTML = `
-              <input type="text" class="ph-label" placeholder="Album ${i+1}" />
-              <input type="url"  class="ph-url"   placeholder="https://imgur.com/a/…" />`;
+            row.innerHTML =
+              '<input type="text" class="ph-label" placeholder="Album '+(i+1)+'">' +
+              '<input type="url"  class="ph-url"   placeholder="https://imgur.com/a/…">';
             phRows.appendChild(row);
           }
         }
@@ -512,13 +554,10 @@
       }
     }
 
-    let pendingLatLng = null;
-    let isAddModalOpen = false;
-
     function openAddModal(latlng){
       pendingLatLng = latlng;
       isAddModalOpen = true;
-      document.getElementById("coordsNote").textContent = `Placing at x=${latlng.lng.toFixed(1)}, y=${latlng.lat.toFixed(1)}`;
+      coordsNote.textContent = "Placing at x="+latlng.lng.toFixed(1)+", y="+latlng.lat.toFixed(1);
       fName.value = "";
       fType.value = "apartment";
       buildLinksFields("apartment");
@@ -531,42 +570,48 @@
     }
 
     btnCancel.addEventListener("click", closeAddModal);
-    fType.addEventListener("change", (e)=> buildLinksFields(e.target.value));
+    fType.addEventListener("change", function(e){ buildLinksFields(e.target.value); });
 
-    btnSave.addEventListener("click", async ()=>{
-      if (!pendingLatLng) return closeAddModal();
-      const name = (fName.value || "").trim();
+    btnSave.addEventListener("click", async function(){
+      if (!pendingLatLng) { closeAddModal(); return; }
+      var name = (fName.value || "").trim();
       if (!name) { alert("Please enter a name."); return; }
-      const type = fType.value;
-      const {lat, lng} = pendingLatLng;
+      var type = fType.value;
+      var lat = pendingLatLng.lat;
+      var lng = pendingLatLng.lng;
 
-      let links = [];
-      let shabby = "", nice = "";
+      var links = [];
+      var shabby = "", nice = "";
       if (type === "apartment"){
         shabby = (document.getElementById("f-shabby").value || "").trim();
         nice   = (document.getElementById("f-nice").value   || "").trim();
-        if (shabby) links.push({label:"Shabby Apartment", url:shabby});
-        if (nice)   links.push({label:"Nice Apartment",   url:nice});
+        if (shabby) links.push({ label:"Shabby Apartment", url:shabby });
+        if (nice)   links.push({ label:"Nice Apartment",   url:nice });
       } else if (type === "office"){
-        const u = (document.getElementById("f-office").value || "").trim();
-        if (u) links.push({label:"Office", url:u});
+        var uo = (document.getElementById("f-office").value || "").trim();
+        if (uo) links.push({ label:"Office", url:uo });
       } else if (type === "motel"){
-        const u = (document.getElementById("f-motel").value || "").trim();
-        if (u) links.push({label:"Album", url:u});
+        var um = (document.getElementById("f-motel").value || "").trim();
+        if (um) links.push({ label:"Album", url:um });
       } else if (type === "penthouse"){
-        const rows = linksArea.querySelectorAll(".link-row");
-        rows.forEach((row, i)=>{
-          const label = (row.querySelector(".ph-label").value || `Album ${i+1}`).trim();
-          const url   = (row.querySelector(".ph-url").value   || "").trim();
-          if (url) links.push({label, url});
-        });
+        var rows = linksArea.querySelectorAll(".link-row");
+        for (var i=0;i<rows.length;i++){
+          var label = (rows[i].querySelector(".ph-label").value || ("Album "+(i+1))).trim();
+          var url   = (rows[i].querySelector(".ph-url").value   || "").trim();
+          if (url) links.push({ label: label, url: url });
+        }
       }
 
       await addDoc(collection(db, "markers"), {
-        name, type, links, x: lng, y: lat,
-        shabby: type==="apartment" ? (shabby || "") : "",
-        nice:   type==="apartment" ? (nice   || "") : "",
-        createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+        name: name,
+        type: type,
+        links: links,
+        x: lng,
+        y: lat,
+        shabby: (type === "apartment") ? (shabby || "") : "",
+        nice:   (type === "apartment") ? (nice   || "") : "",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
 
       closeAddModal();
@@ -576,124 +621,148 @@
     // ===== Edit modal =====
     function buildEditFields(type, entry){
       editBody.innerHTML = "";
-      const nameRow = document.createElement("div");
+      var nameRow = document.createElement("div");
       nameRow.className = "row";
-      nameRow.innerHTML = `<label><span>Name</span><input id="e-name" type="text" value="${entry.name||""}"></label>`;
+      nameRow.innerHTML = '<label><span>Name</span><input id="e-name" type="text" value="'+(entry.name||"")+'"></label>';
       editBody.appendChild(nameRow);
 
-      const typeRow = document.createElement("div");
+      var typeRow = document.createElement("div");
       typeRow.className = "row";
-      typeRow.innerHTML = `
-        <label><span>Type</span>
-          <select id="e-type">
-            <option value="apartment" ${entry.type==="apartment"?"selected":""}>Apartment</option>
-            <option value="office" ${entry.type==="office"?"selected":""}>Office</option>
-            <option value="motel" ${entry.type==="motel"?"selected":""}>Motel</option>
-            <option value="penthouse" ${entry.type==="penthouse"?"selected":""}>Penthouse</option>
-          </select>
-        </label>`;
+      typeRow.innerHTML =
+        '<label><span>Type</span>' +
+          '<select id="e-type">' +
+            '<option value="apartment" '+(entry.type==="apartment"?'selected':'')+'>Apartment</option>' +
+            '<option value="office" '+(entry.type==="office"?'selected':'')+'>Office</option>' +
+            '<option value="motel" '+(entry.type==="motel"?'selected':'')+'>Motel</option>' +
+            '<option value="penthouse" '+(entry.type==="penthouse"?'selected':'')+'>Penthouse</option>' +
+          '</select>' +
+        '</label>';
       editBody.appendChild(typeRow);
 
-      const linksWrap = document.createElement("div");
+      var linksWrap = document.createElement("div");
       linksWrap.id = "e-links";
       linksWrap.className = "row";
       editBody.appendChild(linksWrap);
 
-      const links = Array.isArray(entry.links) ? entry.links.slice() : entryLinks(entry).slice();
+      var links = (entry.links && entry.links.slice) ? entry.links.slice() : entryLinks(entry).slice();
 
       if (type === "apartment"){
-        const shabby = links.find(l=>/shabby/i.test(l.label))?.url || entry.shabby || "";
-        const nice   = links.find(l=>/nice/i.test(l.label))?.url   || entry.nice   || "";
-        linksWrap.innerHTML = `
-          <div class="grid-2">
-            <label><span>Shabby Apartment URL</span><input id="e-shabby" type="url" value="${shabby}"/></label>
-            <label><span>Nice Apartment URL</span><input id="e-nice" type="url" value="${nice}"/></label>
-          </div>`;
+        var shabby = "";
+        var nice = "";
+        for (var i=0;i<links.length;i++){
+          if (links[i].label && /shabby/i.test(links[i].label)) shabby = links[i].url;
+          if (links[i].label && /nice/i.test(links[i].label))   nice   = links[i].url;
+        }
+        if (!shabby) shabby = entry.shabby || "";
+        if (!nice)   nice   = entry.nice   || "";
+        linksWrap.innerHTML =
+          '<div class="grid-2">' +
+            '<label><span>Shabby Apartment URL</span><input id="e-shabby" type="url" value="'+shabby+'"></label>' +
+            '<label><span>Nice Apartment URL</span><input id="e-nice" type="url" value="'+nice+'"></label>' +
+          '</div>';
       } else if (type === "office") {
-        const url = links[0]?.url || "";
-        linksWrap.innerHTML = `<label><span>Office URL</span><input id="e-office" type="url" value="${url}"/></label>`;
+        var urlO = (links[0] && links[0].url) ? links[0].url : "";
+        linksWrap.innerHTML = '<label><span>Office URL</span><input id="e-office" type="url" value="'+urlO+'"></label>';
       } else if (type === "motel") {
-        const url = links[0]?.url || "";
-        linksWrap.innerHTML = `<label><span>Motel Album URL</span><input id="e-motel" type="url" value="${url}"/></label>`;
+        var urlM = (links[0] && links[0].url) ? links[0].url : "";
+        linksWrap.innerHTML = '<label><span>Motel Album URL</span><input id="e-motel" type="url" value="'+urlM+'"></label>';
       } else if (type === "penthouse") {
-        const wrap = document.createElement("div");
+        var wrap = document.createElement("div");
         wrap.className = "row";
-        const count = Math.max(1, Math.min(8, links.length || 1));
-        wrap.innerHTML = `
-          <div class="grid-2">
-            <label><span>Number of links (1–8)</span><input id="e-count" type="number" value="${count}" min="1" max="8"/></label>
-            <div class="row"><span class="muted">Each link can have a custom label.</span></div>
-          </div>
-          <div id="e-phrows" class="row"></div>`;
+        var count = links.length > 0 ? links.length : 1;
+        if (count < 1) count = 1;
+        if (count > 8) count = 8;
+        wrap.innerHTML =
+          '<div class="grid-2">' +
+            '<label><span>Number of links (1–8)</span><input id="e-count" type="number" value="'+count+'" min="1" max="8"></label>' +
+            '<div class="row"><span class="muted">Each link can have a custom label.</span></div>' +
+          '</div>' +
+          '<div id="e-phrows" class="row"></div>';
         linksWrap.appendChild(wrap);
 
-        const rows = wrap.querySelector("#e-phrows");
-        const eCount = wrap.querySelector("#e-count");
+        var rows = wrap.querySelector("#e-phrows");
+        var eCount = wrap.querySelector("#e-count");
 
         function draw(n){
           rows.innerHTML = "";
-          for(let i=0;i<n;i++){
-            const l = links[i] || {};
-            const row = document.createElement("div");
+          for(var i=0;i<n;i++){
+            var Lk = links[i] || {};
+            var row = document.createElement("div");
             row.className = "link-row";
-            row.innerHTML = `
-              <input type="text" class="e-label" value="${l.label || `Album ${i+1}`}">
-              <input type="url"  class="e-url"   value="${l.url   || ""}">`;
+            row.innerHTML =
+              '<input type="text" class="e-label" value="'+(Lk.label || ('Album '+(i+1)))+'">' +
+              '<input type="url"  class="e-url"   value="'+(Lk.url   || '')+'">';
             rows.appendChild(row);
           }
         }
         draw(count);
-        eCount.addEventListener("input", ()=> draw(Math.max(1, Math.min(8, parseInt(eCount.value||"1",10)))));
+        eCount.addEventListener("input", function(){
+          var n = parseInt(eCount.value || "1", 10);
+          if (isNaN(n)) n = 1;
+          if (n < 1) n = 1;
+          if (n > 8) n = 8;
+          draw(n);
+        });
       }
     }
 
     function openEditModal(entry){
-      editingEntry = { ...entry }; // shallow copy
-      buildEditFields(entry.type || "apartment", editingEntry);
+      editingEntry = {
+        id: entry.id,
+        name: entry.name,
+        type: entry.type || "apartment",
+        links: (entry.links && entry.links.slice) ? entry.links.slice() : entryLinks(entry).slice(),
+        shabby: entry.shabby || "",
+        nice: entry.nice || ""
+      };
+      buildEditFields(editingEntry.type, editingEntry);
       editModal.classList.add("show");
 
       // handle type change
-      const typeSelectWatcher = (e)=>{
-        if (e.target && e.target.id === "e-type"){
+      function onTypeChange(e){
+        if (e && e.target && e.target.id === "e-type"){
           buildEditFields(e.target.value, editingEntry);
+          editBody.addEventListener("change", onTypeChange, { once:true });
         }
-      };
-      editBody.addEventListener("change", typeSelectWatcher, { once:true });
+      }
+      editBody.addEventListener("change", onTypeChange, { once:true });
     }
 
-    editCancel.addEventListener("click", ()=>{ editModal.classList.remove("show"); editingEntry=null; });
+    editCancel.addEventListener("click", function(){ editModal.classList.remove("show"); editingEntry=null; });
 
-    editSave.addEventListener("click", async ()=>{
+    editSave.addEventListener("click", async function(){
       if (!editingEntry) return;
-      const name = (document.getElementById("e-name").value || "").trim();
-      const type = document.getElementById("e-type").value;
+      var name = (document.getElementById("e-name").value || "").trim();
+      var type = document.getElementById("e-type").value;
 
-      let links = [];
-      let shabby = "", nice = "";
+      var links = [];
+      var shabby = "", nice = "";
       if (type === "apartment"){
         shabby = (document.getElementById("e-shabby").value || "").trim();
         nice   = (document.getElementById("e-nice").value   || "").trim();
-        if (shabby) links.push({label:"Shabby Apartment", url:shabby});
-        if (nice)   links.push({label:"Nice Apartment",   url:nice});
+        if (shabby) links.push({ label:"Shabby Apartment", url:shabby });
+        if (nice)   links.push({ label:"Nice Apartment",   url:nice });
       } else if (type === "office"){
-        const u = (document.getElementById("e-office").value || "").trim();
-        if (u) links.push({label:"Office", url:u});
+        var uo = (document.getElementById("e-office").value || "").trim();
+        if (uo) links.push({ label:"Office", url:uo });
       } else if (type === "motel"){
-        const u = (document.getElementById("e-motel").value || "").trim();
-        if (u) links.push({label:"Album", url=u});
+        var um = (document.getElementById("e-motel").value || "").trim();
+        if (um) links.push({ label:"Album", url:um });
       } else if (type === "penthouse"){
-        const rows = editBody.querySelectorAll("#e-phrows .link-row");
-        rows.forEach((row,i)=>{
-          const label = (row.querySelector(".e-label").value || `Album ${i+1}`).trim();
-          const url   = (row.querySelector(".e-url").value   || "").trim();
-          if (url) links.push({label, url});
-        });
+        var rows = editBody.querySelectorAll("#e-phrows .link-row");
+        for (var i=0;i<rows.length;i++){
+          var label = (rows[i].querySelector(".e-label").value || ("Album "+(i+1))).trim();
+          var url   = (rows[i].querySelector(".e-url").value   || "").trim();
+          if (url) links.push({ label: label, url: url });
+        }
       }
 
       await updateDoc(doc(db,"markers",editingEntry.id),{
-        name, type, links,
-        shabby: type==="apartment" ? (shabby || "") : "",
-        nice:   type==="apartment" ? (nice   || "") : "",
+        name: name,
+        type: type,
+        links: links,
+        shabby: (type==="apartment") ? (shabby || "") : "",
+        nice:   (type==="apartment") ? (nice   || "") : "",
         updatedAt: serverTimestamp()
       });
       editModal.classList.remove("show");
@@ -702,28 +771,31 @@
 
     // ===== Statistics =====
     function renderStats(){
-      const counts = { total: 0, apartment: 0, penthouse: 0, office: 0, motel: 0 };
-      markers.forEach(m => {
+      var counts = { total: 0, apartment: 0, penthouse: 0, office: 0, motel: 0 };
+      markers.forEach(function(m){
         counts.total++;
-        const t = (m.type || "apartment").toLowerCase();
-        if (counts[t] !== undefined) counts[t]++;
+        var t = (m.type || "apartment").toLowerCase();
+        if (t === "apartment") counts.apartment++;
+        else if (t === "penthouse") counts.penthouse++;
+        else if (t === "office") counts.office++;
+        else if (t === "motel") counts.motel++;
       });
-      statBody.innerHTML = `
-        <div style="padding:14px">
-          <p><strong>Total properties:</strong> ${counts.total}</p>
-          <p>Apartments: ${counts.apartment}</p>
-          <p>Penthouses: ${counts.penthouse}</p>
-          <p>Offices: ${counts.office}</p>
-          <p>Motels: ${counts.motel}</p>
-        </div>`;
+      statBody.innerHTML =
+        '<div style="padding:14px">' +
+          '<p><strong>Total properties:</strong> '+counts.total+'</p>' +
+          '<p>Apartments: '+counts.apartment+'</p>' +
+          '<p>Penthouses: '+counts.penthouse+'</p>' +
+          '<p>Offices: '+counts.office+'</p>' +
+          '<p>Motels: '+counts.motel+'</p>' +
+        '</div>';
     }
 
     // ===== Map + data =====
     function init(imageUrl, w, h){
       mapEl.style.display = "block";
 
-      const bounds = [[0,0],[h,w]];
-      const mapOpts = { crs: L.CRS.Simple, minZoom: -2, maxZoom: 5, zoomControl: true, attributionControl: false };
+      var bounds = [[0,0],[h,w]];
+      var mapOpts = { crs: L.CRS.Simple, minZoom: -2, maxZoom: 5, zoomControl: true, attributionControl: false };
       map = L.map("map", mapOpts);
       L.imageOverlay(imageUrl, bounds).addTo(map);
       map.fitBounds(bounds);
@@ -735,14 +807,14 @@
       clusters.motel.addTo(map);
 
       // Scale icons with zoom (min 16, max 48)
-      map.on("zoomend", () => {
-        const z = map.getZoom();
+      map.on("zoomend", function(){
+        var z = map.getZoom();
         currentIconSize = Math.max(16, Math.min(48, z * 4));
-        markers.forEach(m => { if (m._marker) m._marker.setIcon(iconFor(m)); });
+        markers.forEach(function(m){ if (m._marker) m._marker.setIcon(iconFor(m)); });
       });
 
       // Add marker (only when unlocked + add mode)
-      map.on("click", (e) => {
+      map.on("click", function(e){
         if (isAddModalOpen) return; // keep modal open until Save/Cancel
         if (!(unlocked && addModeEl.checked)) return;
         openAddModal(e.latlng);
@@ -750,41 +822,44 @@
 
       setLockedUI(true);
 
-      const colRef = collection(db, "markers");
-      onSnapshot(colRef, (snap) => {
-        const seen = new Set();
-        snap.forEach(d => {
-          const v = d.data();
-          const entry = {
+      var colRef = collection(db, "markers");
+      onSnapshot(colRef, function(snap){
+        var seen = new Set();
+        snap.forEach(function(d){
+          var v = d.data();
+          var entry = {
             id: d.id,
-            name: v.name || "Property",
-            x: v.x, y: v.y,
-            type: v.type || "apartment",
-            links: Array.isArray(v.links) ? v.links : [],
-            shabby: v.shabby || "",
-            nice: v.nice || ""
+            name: (v && v.name) ? v.name : "Property",
+            x: v && v.x,
+            y: v && v.y,
+            type: (v && v.type) ? v.type : "apartment",
+            links: (v && v.links && v.links.slice) ? v.links : [],
+            shabby: (v && v.shabby) ? v.shabby : "",
+            nice:   (v && v.nice)   ? v.nice   : ""
           };
           createOrUpdateMarker(entry);
           seen.add(d.id);
         });
         // Remove stale
-        [...markers.keys()].forEach(id => { if (!seen.has(id)) removeMarker(id); });
+        Array.from(markers.keys()).forEach(function(id){
+          if (!seen.has(id)) removeMarker(id);
+        });
         // Update badges
         if (statModal.classList.contains("show")) renderStats();
-        statusEl.textContent = `Loaded ${markers.size} properties`;
+        statusEl.textContent = "Loaded " + markers.size + " properties";
         hintEl.textContent = "Ready";
         // Sync icon size initially
         map.fire("zoomend");
       });
 
       // Unlock/Lock
-      unlockBtn.addEventListener("click", async () => {
-        const pass = prompt("Password:");
-        if (pass !== LOCAL_EDIT_PASSWORD) return alert("Wrong password.");
+      unlockBtn.addEventListener("click", async function(){
+        var pass = prompt("Password:");
+        if (pass !== LOCAL_EDIT_PASSWORD) { alert("Wrong password."); return; }
         await signInAnonymously(auth);
         setLockedUI(false);
       });
-      lockBtn.addEventListener("click", async () => {
+      lockBtn.addEventListener("click", async function(){
         await signOut(auth);
         setLockedUI(true);
       });
@@ -793,77 +868,117 @@
     }
 
     // Image loader
-    function tryLoadImage(i=0){
-      if(i >= MAP_CANDIDATES.length){
-        statusEl.textContent = 'Could not find map.jpg/jpeg/png next to index.html.';
+    function tryLoadImage(i){
+      var idx = (typeof i === "number") ? i : 0;
+      if (idx >= MAP_CANDIDATES.length){
+        statusEl.textContent = "Could not find map.jpg/jpeg/png next to index.html.";
         console.warn("[map] no candidates worked");
         return;
       }
-      const src = MAP_CANDIDATES[i] + "?v=" + Date.now();
-      const img = new Image();
-      img.onload = () => init(src, img.naturalWidth, img.naturalHeight);
-      img.onerror = () => tryLoadImage(i+1);
+      var src = MAP_CANDIDATES[idx] + "?v=" + Date.now();
+      var img = new Image();
+      img.onload = function(){ init(src, img.naturalWidth, img.naturalHeight); };
+      img.onerror = function(){ tryLoadImage(idx + 1); };
       img.src = src;
     }
 
     // ===== Settings menu & actions =====
-    settingsBtn.addEventListener("click", (e) => {
+    settingsBtn.addEventListener("click", function(e){
       e.stopPropagation();
-      const open = settingsMenu.style.display === "block";
+      var open = settingsMenu.style.display === "block";
       settingsMenu.style.display = open ? "none" : "block";
     });
-    document.addEventListener("click", () => { settingsMenu.style.display = "none"; });
+    document.addEventListener("click", function(){ settingsMenu.style.display = "none"; });
 
     // Export markers (JSON)
-    menuExport.addEventListener("click", () => {
+    menuExport.addEventListener("click", function(){
       settingsMenu.style.display = "none";
-      const clean = [...markers.values()].map(({name,x,y,type,links,shabby,nice}) => ({name,x,y,type,links,shabby,nice}));
-      const blob = new Blob([JSON.stringify(clean, null, 2)], {type: "application/json"});
-      const url = URL.createObjectURL(blob);
-      const a = Object.assign(document.createElement("a"), { href: url, download: "markers.json" });
-      document.body.appendChild(a); a.click(); URL.revokeObjectURL(url); a.remove();
+      var arr = [];
+      markers.forEach(function(m){
+        arr.push({
+          name: m.name,
+          x: m.x,
+          y: m.y,
+          type: m.type,
+          links: m.links,
+          shabby: m.shabby,
+          nice: m.nice
+        });
+      });
+      var blob = new Blob([JSON.stringify(arr, null, 2)], { type: "application/json" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "markers.json";
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(url);
+      a.remove();
     });
 
     // Statistics
-    menuStats.addEventListener("click", () => { settingsMenu.style.display = "none"; renderStats(); statModal.classList.add("show"); });
-    statClose.addEventListener("click", () => statModal.classList.remove("show"));
+    menuStats.addEventListener("click", function(){
+      settingsMenu.style.display = "none";
+      renderStats();
+      statModal.classList.add("show");
+    });
+    statClose.addEventListener("click", function(){ statModal.classList.remove("show"); });
 
     // Changelog
-    menuChangelog.addEventListener("click", () => { settingsMenu.style.display = "none"; openChangelog(); });
-    chgClose.addEventListener("click", () => chgModal.classList.remove("show"));
-    chgCloseX.addEventListener("click", () => chgModal.classList.remove("show"));
+    menuChangelog.addEventListener("click", function(){
+      settingsMenu.style.display = "none";
+      openChangelog();
+    });
+    chgClose.addEventListener("click", function(){ chgModal.classList.remove("show"); });
+    chgCloseX.addEventListener("click", function(){ chgModal.classList.remove("show"); });
 
-    async function openChangelog(){
+    function openChangelog(){
       chgBody.innerHTML = '<div style="padding:14px">Loading commits…</div>';
       chgModal.classList.add("show");
-      const cacheKey = "chg_"+REPO_OWNER+"_"+REPO_NAME;
-      const cached = sessionStorage.getItem(cacheKey);
+      var cacheKey = "chg_" + REPO_OWNER + "_" + REPO_NAME;
+      var cached = null;
+      try { cached = sessionStorage.getItem(cacheKey); } catch(e) {}
       if (cached) { chgBody.innerHTML = cached; return; }
-      try{
-        const url = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits?per_page=20`;
-        const res = await fetch(url, { headers: { "Accept":"application/vnd.github+json" }});
-        if (!res.ok) throw new Error("GitHub API " + res.status);
-        const commits = await res.json();
-        const html = commits.map(c=>{
-          const msg = (c.commit?.message || "").trim();
-          const [title, ...rest] = msg.split(/\r?\n/);
-          const body = rest.join("\n").trim();
-          const date = new Date(c.commit?.author?.date || c.commit?.committer?.date || Date.now());
-          const when = date.toLocaleString();
-          return `
-            <div class="commit" style="padding:12px 14px; border-bottom:1px solid #eee">
-              <h4 style="margin:0 0 6px; font-size:14px">${escapeHtml(title || "Commit")}</h4>
-              ${body ? `<div class="muted" style="white-space:pre-wrap">${escapeHtml(body)}</div>` : ""}
-              <small class="muted">${escapeHtml((c.commit && c.commit.author && c.commit.author.name) || (c.author && c.author.login) || "Unknown")} — ${when}</small>
-            </div>`;
-        }).join("");
-        chgBody.innerHTML = html || '<div style="padding:14px">No recent commits.</div>';
-        sessionStorage.setItem(cacheKey, chgBody.innerHTML);
-      }catch(err){
-        chgBody.innerHTML = `<div style="padding:14px;color:#b00020">Failed to load commits: ${escapeHtml(err.message)}</div>`;
-      }
+      var url = "https://api.github.com/repos/" + REPO_OWNER + "/" + REPO_NAME + "/commits?per_page=20";
+      fetch(url, { headers: { "Accept": "application/vnd.github+json" } })
+        .then(function(res){
+          if (!res.ok) throw new Error("GitHub API " + res.status);
+          return res.json();
+        })
+        .then(function(commits){
+          var html = "";
+          for (var i=0;i<commits.length;i++){
+            var c = commits[i];
+            var commit = c.commit ? c.commit : {};
+            var authorObj = commit.author ? commit.author : null;
+            var authorName = authorObj && authorObj.name ? authorObj.name : (c.author && c.author.login ? c.author.login : "Unknown");
+            var msg = commit.message ? String(commit.message).trim() : "";
+            var parts = msg.split(/\r?\n/);
+            var title = parts.shift() || "Commit";
+            var body = parts.join("\n").trim();
+            var dstr = (authorObj && authorObj.date) ? authorObj.date : (commit.committer && commit.committer.date ? commit.committer.date : "");
+            var when = "";
+            try { when = dstr ? new Date(dstr).toLocaleString() : ""; } catch(e) { when = ""; }
+
+            html += '' +
+              '<div class="commit" style="padding:12px 14px; border-bottom:1px solid #eee">' +
+                '<h4 style="margin:0 0 6px; font-size:14px">'+escapeHtml(title)+'</h4>' +
+                (body ? '<div class="muted" style="white-space:pre-wrap">'+escapeHtml(body)+'</div>' : '') +
+                '<small class="muted">'+escapeHtml(authorName)+' — '+escapeHtml(when)+'</small>' +
+              '</div>';
+          }
+          chgBody.innerHTML = html || '<div style="padding:14px">No recent commits.</div>';
+          try { sessionStorage.setItem(cacheKey, chgBody.innerHTML); } catch(e) {}
+        })
+        .catch(function(err){
+          chgBody.innerHTML = '<div style="padding:14px;color:#b00020">Failed to load commits: '+escapeHtml(err.message)+'</div>';
+        });
     }
-    function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+    function escapeHtml(s){
+      var map = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' };
+      return String(s).replace(/[&<>"]/g, function(c){ return map[c]; });
+    }
 
     // Boot
     tryLoadImage();
