@@ -72,6 +72,9 @@
     .btn{ border:none; padding:8px 12px; border-radius:8px; cursor:pointer; }
     .btn.primary{ background:#111; color:#fff; }
     .btn.ghost{ background:#eee; }
+
+    /* Drop Leaflet zoom buttons down so they don't overlap toolbar */
+    .leaflet-control-zoom { margin-top: 70px !important; }
   </style>
 </head>
 <body>
@@ -137,6 +140,18 @@
     </div>
   </div>
 
+  <!-- Edit Property Modal -->
+  <div id="editModal" class="modal" aria-hidden="true">
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+      <header id="editTitle">Edit Property</header>
+      <main id="editBody"></main>
+      <footer>
+        <button id="editCancel" class="btn ghost">Cancel</button>
+        <button id="editSave" class="btn primary">Save</button>
+      </footer>
+    </div>
+  </div>
+
   <!-- Changelog Modal -->
   <div id="changelogModal" class="modal" aria-hidden="true">
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="chgTitle">
@@ -146,13 +161,11 @@
     </div>
   </div>
 
-  <!-- Stats Modal (placeholder for 1.0.5) -->
+  <!-- Statistics Modal -->
   <div id="statsModal" class="modal" aria-hidden="true">
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="statTitle">
       <header id="statTitle">Statistics</header>
-      <main id="statBody">
-        <div style="padding:14px">Coming in <strong>beta 1.0.5</strong>: totals by type and overall property count.</div>
-      </main>
+      <main id="statBody"></main>
       <footer><button id="statClose" class="btn primary">Close</button></footer>
     </div>
   </div>
@@ -164,8 +177,8 @@
     import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ==== Build / Version
-    const VERSION = "beta 1.0.4";
-    const VERSION_NOTE = "Settings menu (Export/Changelog); Add modal explicit-close; motel Album + red note; logo + title";
+    const VERSION = "beta 1.0.5";
+    const VERSION_NOTE = "Statistics modal + Edit modal + zoom control reposition";
     document.getElementById("version").textContent = VERSION;
     console.log(`Dynasty 8 Map – ${VERSION} — ${VERSION_NOTE}`);
 
@@ -203,6 +216,7 @@
     const chgClose = document.getElementById("chgClose");
 
     const statModal = document.getElementById("statsModal");
+    const statBody  = document.getElementById("statBody");
     const statClose = document.getElementById("statClose");
 
     // Add modal
@@ -213,6 +227,12 @@
     const btnCancel = document.getElementById("btnCancel");
     const btnSave = document.getElementById("btnSave");
     const coordsNote = document.getElementById("coordsNote");
+
+    // Edit modal
+    const editModal = document.getElementById("editModal");
+    const editBody  = document.getElementById("editBody");
+    const editCancel= document.getElementById("editCancel");
+    const editSave  = document.getElementById("editSave");
 
     // --- Config
     const LOCAL_EDIT_PASSWORD = "D8D8D8";
@@ -311,11 +331,7 @@
         const editBtn = el.querySelector('[data-action="edit"]');
         const delBtn  = el.querySelector('[data-action="delete"]');
 
-        if (editBtn) editBtn.addEventListener('click', async () => {
-          const name = prompt("Property name:", entry.name || "") ?? entry.name;
-          await updateDoc(doc(db, "markers", entry.id), { name, updatedAt: serverTimestamp() });
-        });
-
+        if (editBtn) editBtn.addEventListener('click', () => openEditModal(entry));
         if (delBtn) delBtn.addEventListener('click', async () => {
           if (!confirm("Delete this marker?")) return;
           await deleteDoc(doc(db, "markers", entry.id));
@@ -428,7 +444,6 @@
       isAddModalOpen = false;
     }
 
-    // Only Save/Cancel close it
     btnCancel.addEventListener("click", closeAddModal);
     fType.addEventListener("change", (e)=> buildLinksFields(e.target.value));
     btnSave.addEventListener("click", async ()=>{
@@ -471,6 +486,155 @@
       toast("Property added.");
     });
 
+    // ===== Edit modal =====
+    let editingEntry = null;
+
+    function buildEditFields(type, entry){
+      editBody.innerHTML = "";
+      const nameRow = document.createElement("div");
+      nameRow.className = "row";
+      nameRow.innerHTML = `<label><span>Name</span><input id="e-name" type="text" value="${entry.name||""}"></label>`;
+      editBody.appendChild(nameRow);
+
+      const typeRow = document.createElement("div");
+      typeRow.className = "row";
+      typeRow.innerHTML = `
+        <label><span>Type</span>
+          <select id="e-type">
+            <option value="apartment" ${entry.type==="apartment"?"selected":""}>Apartment</option>
+            <option value="office" ${entry.type==="office"?"selected":""}>Office</option>
+            <option value="motel" ${entry.type==="motel"?"selected":""}>Motel</option>
+            <option value="penthouse" ${entry.type==="penthouse"?"selected":""}>Penthouse</option>
+          </select>
+        </label>`;
+      editBody.appendChild(typeRow);
+
+      const linksWrap = document.createElement("div");
+      linksWrap.id = "e-links";
+      linksWrap.className = "row";
+      editBody.appendChild(linksWrap);
+
+      // render link fields by type
+      const links = Array.isArray(entry.links) ? entry.links.slice() : entryLinks(entry).slice();
+
+      if (type === "apartment"){
+        const shabby = links.find(l=>/shabby/i.test(l.label))?.url || entry.shabby || "";
+        const nice   = links.find(l=>/nice/i.test(l.label))?.url   || entry.nice   || "";
+        linksWrap.innerHTML = `
+          <div class="grid-2">
+            <label><span>Shabby Apartment URL</span><input id="e-shabby" type="url" value="${shabby}"/></label>
+            <label><span>Nice Apartment URL</span><input id="e-nice" type="url" value="${nice}"/></label>
+          </div>`;
+      } else if (type === "office") {
+        const url = links[0]?.url || "";
+        linksWrap.innerHTML = `<label><span>Office URL</span><input id="e-office" type="url" value="${url}"/></label>`;
+      } else if (type === "motel") {
+        const url = links[0]?.url || "";
+        linksWrap.innerHTML = `<label><span>Motel Album URL</span><input id="e-motel" type="url" value="${url}"/></label>`;
+      } else if (type === "penthouse") {
+        const wrap = document.createElement("div");
+        wrap.className = "row";
+        const count = Math.max(1, Math.min(8, links.length || 1));
+        wrap.innerHTML = `
+          <div class="grid-2">
+            <label><span>Number of links (1–8)</span><input id="e-count" type="number" value="${count}" min="1" max="8"/></label>
+            <div class="row"><span class="muted">Each link can have a custom label.</span></div>
+          </div>
+          <div id="e-phrows" class="row"></div>`;
+        linksWrap.appendChild(wrap);
+
+        const rows = wrap.querySelector("#e-phrows");
+        const eCount = wrap.querySelector("#e-count");
+
+        function draw(n){
+          rows.innerHTML = "";
+          for(let i=0;i<n;i++){
+            const l = links[i] || {};
+            const row = document.createElement("div");
+            row.className = "link-row";
+            row.innerHTML = `
+              <input type="text" class="e-label" value="${l.label || `Album ${i+1}`}">
+              <input type="url"  class="e-url"   value="${l.url   || ""}">`;
+            rows.appendChild(row);
+          }
+        }
+        draw(count);
+        eCount.addEventListener("input", ()=> draw(Math.max(1, Math.min(8, parseInt(eCount.value||"1",10)))));
+      }
+    }
+
+    function openEditModal(entry){
+      editingEntry = { ...entry }; // shallow copy
+      buildEditFields(entry.type || "apartment", editingEntry);
+      editModal.classList.add("show");
+
+      // handle type change
+      editBody.addEventListener("change", onTypeChange, { once:true });
+      function onTypeChange(e){
+        if (e.target && e.target.id === "e-type"){
+          buildEditFields(e.target.value, editingEntry);
+          editBody.addEventListener("change", onTypeChange, { once:true });
+        }
+      }
+    }
+
+    editCancel.addEventListener("click", ()=>{ editModal.classList.remove("show"); editingEntry=null; });
+
+    editSave.addEventListener("click", async ()=>{
+      if (!editingEntry) return;
+      const name = (document.getElementById("e-name").value || "").trim();
+      const type = document.getElementById("e-type").value;
+
+      let links = [];
+      let shabby = "", nice = "";
+      if (type === "apartment"){
+        shabby = (document.getElementById("e-shabby").value || "").trim();
+        nice   = (document.getElementById("e-nice").value   || "").trim();
+        if (shabby) links.push({label:"Shabby Apartment", url:shabby});
+        if (nice)   links.push({label:"Nice Apartment",   url:nice});
+      } else if (type === "office"){
+        const u = (document.getElementById("e-office").value || "").trim();
+        if (u) links.push({label:"Office", url:u});
+      } else if (type === "motel"){
+        const u = (document.getElementById("e-motel").value || "").trim();
+        if (u) links.push({label:"Album", url:u});
+      } else if (type === "penthouse"){
+        const rows = editBody.querySelectorAll("#e-phrows .link-row");
+        rows.forEach((row,i)=>{
+          const label = (row.querySelector(".e-label").value || `Album ${i+1}`).trim();
+          const url   = (row.querySelector(".e-url").value   || "").trim();
+          if (url) links.push({label, url});
+        });
+      }
+
+      await updateDoc(doc(db,"markers",editingEntry.id),{
+        name, type, links,
+        shabby: type==="apartment" ? (shabby || "") : "",
+        nice:   type==="apartment" ? (nice   || "") : "",
+        updatedAt: serverTimestamp()
+      });
+      editModal.classList.remove("show");
+      editingEntry=null;
+    });
+
+    // ===== Statistics =====
+    function renderStats(){
+      const counts = { total: 0, apartment: 0, penthouse: 0, office: 0, motel: 0 };
+      markers.forEach(m => {
+        counts.total++;
+        const t = (m.type || "apartment").toLowerCase();
+        if (counts[t] !== undefined) counts[t]++;
+      });
+      statBody.innerHTML = `
+        <div style="padding:14px">
+          <p><strong>Total properties:</strong> ${counts.total}</p>
+          <p>Apartments: ${counts.apartment}</p>
+          <p>Penthouses: ${counts.penthouse}</p>
+          <p>Offices: ${counts.office}</p>
+          <p>Motels: ${counts.motel}</p>
+        </div>`;
+    }
+
     // ===== Map + data =====
     function init(imageUrl, w, h){
       statusEl.style.display = "none";
@@ -490,7 +654,7 @@
       });
 
       map.on("click", (e) => {
-        if (isAddModalOpen) return; // don't close or reopen while modal is up
+        if (isAddModalOpen) return; // keep add modal open until Save/Cancel
         if (!(unlocked && addModeEl.checked)) return;
         openAddModal(e.latlng);
       });
@@ -516,9 +680,12 @@
         });
         [...markers.keys()].forEach(id => { if (!seen.has(id)) removeMarker(id); });
         map.fire("zoomend");
-        toast(`Live markers: ${snap.size}`); // will be moved to Stats in 1.0.5
+        // Update stats live if open
+        if (statModal.classList.contains("show")) renderStats();
+        hintEl.textContent = `Loaded ${markers.size} properties`;
       });
 
+      // Unlock/Lock
       unlockBtn.addEventListener("click", async () => {
         const pass = prompt("Password:");
         if (pass !== LOCAL_EDIT_PASSWORD) return alert("Wrong password.");
@@ -533,7 +700,7 @@
       editModeEl.addEventListener("change", applyEditMode);
     }
 
-    // ===== Primary image loader
+    // ===== Image loader
     function tryLoadImage(i=0){
       if(i >= MAP_CANDIDATES.length){
         statusEl.innerHTML = 'Could not find a map image. Put it next to <code>index.html</code> and name it <code>map.jpg</code>, <code>map.jpeg</code>, or <code>map.png</code>.';
@@ -567,12 +734,9 @@
       document.body.appendChild(a); a.click(); URL.revokeObjectURL(url); a.remove();
     });
 
-    // Stats (placeholder)
-    menuStats.addEventListener("click", () => {
-      settingsMenu.style.display = "none";
-      document.getElementById("statsModal").classList.add("show");
-    });
-    statClose.addEventListener("click", () => document.getElementById("statsModal").classList.remove("show"));
+    // Statistics
+    menuStats.addEventListener("click", () => { settingsMenu.style.display = "none"; renderStats(); statModal.classList.add("show"); });
+    statClose.addEventListener("click", () => statModal.classList.remove("show"));
 
     // Changelog
     menuChangelog.addEventListener("click", () => { settingsMenu.style.display = "none"; openChangelog(); });
