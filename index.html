@@ -854,7 +854,7 @@
             <div class="commit" style="padding:12px 14px; border-bottom:1px solid #eee">
               <h4 style="margin:0 0 6px; font-size:14px">${escapeHtml(title || "Commit")}</h4>
               ${body ? `<div class="muted" style="white-space:pre-wrap">${escapeHtml(body)}</div>` : ""}
-              <small class="muted">${escapeHtml(c.commit?.author?.name || c.author?.login || "Unknown")} — ${when}</small>
+              <small class="muted">${escapeHtml((c.commit && c.commit.author && c.commit.author.name) || (c.author && c.author.login) || "Unknown")} — ${when}</small>
             </div>`;
         }).join("");
         chgBody.innerHTML = html || '<div style="padding:14px">No recent commits.</div>';
