@@ -8,10 +8,10 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin />
   <style>
     :root{
-      --main:#93c47d;       /* header / brand */
-      --secondary:#b6d7a8;  /* body */
-      --accent:#d9ead3;     /* cards / accents */
-      --sea:#0fa8d2;        /* page/map bg */
+      --main:#93c47d;       /* header / brand (darker green) */
+      --secondary:#b6d7a8;  /* middle green */
+      --accent:#d9ead3;     /* lightest green (cards / popups) */
+      --sea:#0fa8d2;        /* page/map bg (ocean) */
       --ink:#111;
       --muted:#666;
       --paper:#fff;
@@ -71,14 +71,20 @@
     }
     #settingsMenu button:hover{ background:#f2f2f2; color:#111; } /* hover fix */
 
-    /* Modals (styled with your palette) */
-    .modal{ position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.45); z-index:1500; }
-    .modal.show{ display:grid; }
+    /* Modals (styled with your palette) + fade animations */
+    .modal{
+      position:fixed; inset:0; display:grid; place-items:center;
+      background:rgba(0,0,0,.45); z-index:1500;
+      opacity:0; pointer-events:none; transition:opacity .18s ease;
+    }
+    .modal.show{ opacity:1; pointer-events:auto; }
     .card{
       width:min(560px, calc(100vw - 24px)); max-height:85vh; overflow:auto;
       background:var(--secondary); color:var(--ink); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.25);
       font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      transform:translateY(6px); transition:transform .18s ease;
     }
+    .modal.show .card{ transform:translateY(0); }
     .card header{ padding:12px 14px; background:var(--main); border-radius:12px 12px 0 0; font-weight:700; position:relative; }
     .card main{ padding:14px; display:grid; gap:12px; background:var(--accent); }
     .card footer{ padding:12px 14px; background:var(--secondary); border-radius:0 0 12px 12px; display:flex; gap:8px; justify-content:flex-end; }
@@ -102,20 +108,21 @@
     }
     .modal .close-x:hover{ filter:brightness(.95); }
 
-    /* Leaflet popup styling with palette */
+    /* Popup restyle: title/border darker green, body lightest green */
     .leaflet-popup-content-wrapper{
-      background:var(--secondary);
+      background:var(--accent);
       border:2px solid var(--main);
       border-radius:10px;
     }
-    .leaflet-popup-tip{ background:var(--secondary); }
+    .leaflet-popup-tip{ background:var(--accent); }
     .popup h3{
       margin:0 0 6px 0; font-size:16px;
       color:#111; background:var(--main); padding:4px 6px; border-radius:6px; display:inline-block;
     }
     .popup p{ margin:0 0 6px; }
     .popup small{ color:#333; display:block; margin-top:6px; }
-    .popup a{ color:#003366; font-weight:600; }
+    .popup a{ color:#003366; font-weight:600; text-decoration:none; border-bottom:1px solid transparent; }
+    .popup a:hover{ border-bottom-color:#003366; }
 
     /* Move Leaflet zoom controls to bottom-left */
     .leaflet-control-zoom{
@@ -132,21 +139,21 @@
     </div>
 
     <!-- Hidden until unlocked -->
-    <label id="addWrap" style="display:none"><input type="checkbox" id="addMode"> Add</label>
-    <label id="editWrap" style="display:none"><input type="checkbox" id="editMode"> Edit</label>
+    <label id="addWrap" style="display:none" title="Enable click-to-add mode"><input type="checkbox" id="addMode"> Add</label>
+    <label id="editWrap" style="display:none" title="Enable drag/edit mode"><input type="checkbox" id="editMode"> Edit</label>
 
-    <button id="unlockBtn">Unlock</button>
-    <button id="lockBtn" style="display:none">Lock</button>
+    <button id="unlockBtn" title="Enter password to edit">Unlock</button>
+    <button id="lockBtn" style="display:none" title="Lock editing">Lock</button>
 
     <span id="hint">Loading…</span>
 
     <!-- Settings (right) -->
     <div id="settings">
-      <button id="settingsBtn">⚙️ Settings</button>
+      <button id="settingsBtn" title="Open settings">⚙️ Settings</button>
       <div id="settingsMenu" role="menu" aria-hidden="true">
-        <button id="menuExport">Export markers</button>
-        <button id="menuChangelog">Changelog</button>
-        <button id="menuStats">Statistics</button>
+        <button id="menuExport" title="Download markers.json">Export markers</button>
+        <button id="menuChangelog" title="View recent commits">Changelog</button>
+        <button id="menuStats" title="Totals & last updated">Statistics</button>
       </div>
     </div>
   </div>
@@ -232,8 +239,8 @@
     import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ===== Build / Version =====
-    const VERSION = "beta 1.0.7";
-    const VERSION_NOTE = "Remove clustering; use per-type layers; keep 1.0.6 styling & features";
+    const VERSION = "beta 1.0.8";
+    const VERSION_NOTE = "Popup restyle, UI tooltips + modal fade, stats last updated, unsaved-change warnings, autofocus";
     document.getElementById("version").textContent = VERSION;
     console.log("Dynasty 8 Map — " + VERSION + " — " + VERSION_NOTE);
 
@@ -315,6 +322,9 @@
       office:    L.layerGroup(),
       motel:     L.layerGroup()
     };
+
+    // track latest updatedAt for Statistics
+    let latestUpdatedAtMillis = 0;
 
     function toast(m){ hintEl.textContent = m; }
 
@@ -453,7 +463,8 @@
           type: entry.type || "apartment",
           links: entry.links || [],
           shabby: entry.shabby || "",
-          nice: entry.nice || ""
+          nice: entry.nice || "",
+          updatedAt: entry.updatedAt || 0
         };
         m._marker = L.marker([m.y, m.x], {
           draggable: !!(unlocked && editModeEl.checked),
@@ -482,6 +493,7 @@
         m.links = entry.links;
         m.shabby = entry.shabby;
         m.nice = entry.nice;
+        m.updatedAt = entry.updatedAt || m.updatedAt || 0;
         if (m._marker) {
           m._marker.setLatLng([m.y, m.x]);
           m._marker.setIcon(iconFor(m));
@@ -489,6 +501,7 @@
           setMarkerPopup(m);
         }
       }
+      if (m.updatedAt && m.updatedAt > latestUpdatedAtMillis) latestUpdatedAtMillis = m.updatedAt;
     }
 
     function removeMarker(id){
@@ -500,9 +513,10 @@
       markers.delete(id);
     }
 
-    // ===== Add Modal logic (explicit-close) =====
+    // ===== Add Modal logic (explicit-close) with unsaved warning + autofocus =====
     let pendingLatLng = null;
     let isAddModalOpen = false;
+    let addDirty = false;
 
     function buildLinksFields(type){
       linksArea.innerHTML = "";
@@ -544,31 +558,40 @@
             phRows.appendChild(row);
           }
         }
-        fCount.addEventListener("input", renderRows);
+        fCount.addEventListener("input", function(){ addDirty = true; renderRows(); });
         renderRows();
       }
+      // mark dirty when any input changes
+      linksArea.addEventListener("input", function(){ addDirty = true; }, { once:true });
     }
 
     function openAddModal(latlng){
       pendingLatLng = latlng;
       isAddModalOpen = true;
+      addDirty = false;
       coordsNote.textContent = "Placing at x="+latlng.lng.toFixed(1)+", y="+latlng.lat.toFixed(1);
       fName.value = "";
       fType.value = "apartment";
       buildLinksFields("apartment");
       addModal.classList.add("show");
+      setTimeout(function(){ fName.focus(); }, 30); // autofocus
     }
-    function closeAddModal(){
+    function closeAddModal(force){
+      if (!force && addDirty && (fName.value.trim() || linksArea.querySelector("input")?.value)){
+        var ok = confirm("You have unsaved changes. Close without saving?");
+        if (!ok) return;
+      }
       addModal.classList.remove("show");
       pendingLatLng = null;
       isAddModalOpen = false;
+      addDirty = false;
     }
 
-    btnCancel.addEventListener("click", closeAddModal);
-    fType.addEventListener("change", function(e){ buildLinksFields(e.target.value); });
+    btnCancel.addEventListener("click", function(){ closeAddModal(false); });
+    fType.addEventListener("change", function(e){ addDirty = true; buildLinksFields(e.target.value); });
 
     btnSave.addEventListener("click", async function(){
-      if (!pendingLatLng) { closeAddModal(); return; }
+      if (!pendingLatLng) { closeAddModal(true); return; }
       var name = (fName.value || "").trim();
       if (!name) { alert("Please enter a name."); return; }
       var type = fType.value;
@@ -609,13 +632,17 @@
         updatedAt: serverTimestamp()
       });
 
-      closeAddModal();
+      closeAddModal(true);
       toast("Property added.");
     });
 
-    // ===== Edit modal =====
+    // ===== Edit modal (unsaved warn + autofocus) =====
+    let editDirty = false;
+
     function buildEditFields(type, entry){
       editBody.innerHTML = "";
+      editDirty = false;
+
       var nameRow = document.createElement("div");
       nameRow.className = "row";
       nameRow.innerHTML = '<label><span>Name</span><input id="e-name" type="text" value="'+(entry.name||"")+'"></label>';
@@ -692,6 +719,7 @@
         }
         draw(count);
         eCount.addEventListener("input", function(){
+          editDirty = true;
           var n = parseInt(eCount.value || "1", 10);
           if (isNaN(n)) n = 1;
           if (n < 1) n = 1;
@@ -699,6 +727,14 @@
           draw(n);
         });
       }
+
+      // mark dirty on any input
+      editBody.addEventListener("input", function(){ editDirty = true; }, { once:true });
+      // autofocus first field
+      setTimeout(function(){
+        var first = document.getElementById("e-name");
+        if (first) first.focus();
+      }, 30);
     }
 
     function openEditModal(entry){
@@ -723,7 +759,15 @@
       editBody.addEventListener("change", onTypeChange, { once:true });
     }
 
-    editCancel.addEventListener("click", function(){ editModal.classList.remove("show"); editingEntry=null; });
+    editCancel.addEventListener("click", function(){
+      if (editDirty){
+        var ok = confirm("You have unsaved changes. Close without saving?");
+        if (!ok) return;
+      }
+      editModal.classList.remove("show");
+      editingEntry=null;
+      editDirty=false;
+    });
 
     editSave.addEventListener("click", async function(){
       if (!editingEntry) return;
@@ -762,9 +806,15 @@
       });
       editModal.classList.remove("show");
       editingEntry=null;
+      editDirty=false;
     });
 
     // ===== Statistics =====
+    function formatLastUpdated(ms){
+      if (!ms) return "—";
+      try { return new Date(ms).toLocaleString(); } catch(e){ return "—"; }
+    }
+
     function renderStats(){
       var counts = { total: 0, apartment: 0, penthouse: 0, office: 0, motel: 0 };
       markers.forEach(function(m){
@@ -775,6 +825,7 @@
         else if (t === "office") counts.office++;
         else if (t === "motel") counts.motel++;
       });
+      var last = formatLastUpdated(latestUpdatedAtMillis);
       statBody.innerHTML =
         '<div style="padding:14px">' +
           '<p><strong>Total properties:</strong> '+counts.total+'</p>' +
@@ -782,6 +833,8 @@
           '<p>Penthouses: '+counts.penthouse+'</p>' +
           '<p>Offices: '+counts.office+'</p>' +
           '<p>Motels: '+counts.motel+'</p>' +
+          '<hr style="border:none;border-top:1px solid #c6dec0;margin:10px 0">' +
+          '<p><strong>Last updated:</strong> '+last+'</p>' +
         '</div>';
     }
 
@@ -820,8 +873,24 @@
       var colRef = collection(db, "markers");
       onSnapshot(colRef, function(snap){
         var seen = new Set();
+        // reset last updated; recompute from snapshot to be robust
+        latestUpdatedAtMillis = 0;
+
         snap.forEach(function(d){
           var v = d.data();
+          var ms = 0;
+          // Firestore timestamps may be objects; handle seconds/nanoseconds or Date
+          if (v && v.updatedAt){
+            try {
+              if (typeof v.updatedAt.toDate === "function") {
+                ms = v.updatedAt.toDate().getTime();
+              } else if (v.updatedAt.seconds){
+                ms = (v.updatedAt.seconds*1000) + Math.floor((v.updatedAt.nanoseconds||0)/1e6);
+              } else if (v.updatedAt instanceof Date){
+                ms = v.updatedAt.getTime();
+              }
+            } catch(e){}
+          }
           var entry = {
             id: d.id,
             name: (v && v.name) ? v.name : "Property",
@@ -830,8 +899,10 @@
             type: (v && v.type) ? v.type : "apartment",
             links: (v && v.links && v.links.slice) ? v.links : [],
             shabby: (v && v.shabby) ? v.shabby : "",
-            nice:   (v && v.nice)   ? v.nice   : ""
+            nice:   (v && v.nice)   ? v.nice   : "",
+            updatedAt: ms
           };
+          if (ms && ms > latestUpdatedAtMillis) latestUpdatedAtMillis = ms;
           createOrUpdateMarker(entry);
           seen.add(d.id);
         });
