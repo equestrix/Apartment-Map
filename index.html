@@ -96,9 +96,9 @@
     .popup a{ color:#003366; font-weight:600; text-decoration:none; border-bottom:1px solid transparent; }
     .popup a:hover{ border-bottom-color:#003366; }
 
-    /* Zoom bottom-left */
+    /* Zoom — bumped down a bit more */
     .leaflet-control-zoom{
-      position:absolute !important; left:10px !important; bottom:48px !important;
+      position:absolute !important; left:10px !important; bottom:72px !important;
       top:auto !important; margin:0 !important;
     }
 
@@ -108,8 +108,8 @@
       border:1px solid rgba(0,0,0,.1); white-space:nowrap;
     }
 
-    /* Layers control — top-left, tucked under the banner */
-    .leaflet-top.leaflet-left .leaflet-control.layers-toggle { margin:64px 0 0 10px; }
+    /* Layers control — top-left under banner, bumped down */
+    .leaflet-top.leaflet-left .leaflet-control.layers-toggle { margin:76px 0 0 10px; }
     .leaflet-control.layers-toggle .btn{
       display:flex; align-items:center; gap:6px;
       background:#fff; color:#111; border-radius:8px; padding:8px 10px;
@@ -214,8 +214,8 @@
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ===== Build =====
-    const VERSION = "beta 1.1.5";
-    const VERSION_NOTE = "Center reliably; move Layers to top-left under banner; overlay enabled by default.";
+    const VERSION = "beta 1.1.6";
+    const VERSION_NOTE = "Center + slight downward nudge; Layers & Zoom bumped down; add/edit reliability.";
     document.getElementById("version").textContent = VERSION;
 
     // ===== Firebase =====
@@ -366,7 +366,8 @@
         if (editBtn) editBtn.addEventListener('click', () => openEditModal(entry));
         if (delBtn) delBtn.addEventListener('click', async () => {
           if (!confirm("Delete this marker?")) return;
-          await deleteDoc(doc(db, "markers", entry.id));
+          try { await deleteDoc(doc(db, "markers", entry.id)); }
+          catch(err){ alert("Failed to delete: " + (err?.message||err)); }
         });
       });
     }
@@ -397,23 +398,26 @@
     function init(imageUrl, w, h){
       imageWidth = w; imageHeight = h;
       imageBounds = L.latLngBounds([[0,0],[h,w]]);
+      const targetZoomPadPx = 12; // tiny padding for fit
       map = L.map("map", { crs:L.CRS.Simple, minZoom:-2, maxZoom:5, zoomControl:true, attributionControl:false });
       const imgLayer = L.imageOverlay(imageUrl, imageBounds, { interactive:false }).addTo(map);
 
-      // Show map, size it, fit & center
+      // Show map, size it, fit & center, then nudge down a bit
       mapEl.style.display = "block";
       requestAnimationFrame(() => {
         map.invalidateSize();
-        const targetZoom = map.getBoundsZoom(imageBounds, true);
+        const targetZoom = map.getBoundsZoom(imageBounds.pad(0), true);
         const center = imageBounds.getCenter();
         map.setView(center, targetZoom, { animate:false });
+        map.panBy([0, 140], { animate:false }); // nudge view down a bit
       });
 
-      // Also center once the image is fully ready (belt & suspenders)
+      // Also center once the image is fully ready
       imgLayer.once('load', () => {
-        const targetZoom = map.getBoundsZoom(imageBounds, true);
+        const targetZoom = map.getBoundsZoom(imageBounds.pad(0), true);
         const center = imageBounds.getCenter();
         map.setView(center, targetZoom, { animate:false });
+        map.panBy([0, 140], { animate:false });
       });
 
       statusEl.textContent = "Image map loaded";
@@ -428,6 +432,7 @@
         markers.forEach(m => { if (m._marker) m._marker.setIcon(iconFor(m)); });
       });
 
+      // Add only when unlocked + Add mode checked (kept same behavior)
       map.on("click", (e) => {
         if (!(unlocked && addModeEl.checked)) return;
         if (document.querySelector("#addModal.show")) return;
@@ -474,11 +479,10 @@
             panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
           });
           L.DomEvent.on(map.getContainer(), 'click', () => { panel.style.display = 'none'; });
-          // Wire after DOM laid out
           setTimeout(() => {
             const chkOverlay = panel.querySelector('#chkOverlay');
             const chkAreas   = panel.querySelector('#chkAreas');
-            // If overlay is already present (default ON), reflect it
+            // Reflect default-on overlay
             chkOverlay.checked = !!(zonesOverlay && map.hasLayer(zonesOverlay));
             chkOverlay.addEventListener('change', () => {
               if (!zonesOverlay){ toast("No overlay found."); chkOverlay.checked = false; return; }
@@ -495,7 +499,6 @@
       });
       const ctl = new LayersControl();
       map.addControl(ctl);
-      // Force it into the Leaflet top-left corner (in case of external CSS)
       const tl = map._controlCorners && map._controlCorners['topleft'];
       const el = document.querySelector('.leaflet-control.layers-toggle');
       if (tl && el && el.parentNode !== tl) tl.appendChild(el);
@@ -509,7 +512,6 @@
         zonesOverlay = L.imageOverlay("overlay.png?v="+Date.now(), bounds, { opacity:0.85, interactive:false });
         if (defaultOn) {
           zonesOverlay.addTo(map);
-          // If the control is already mounted, tick the checkbox
           const chk = document.getElementById("chkOverlay");
           if (chk) chk.checked = true;
         }
@@ -535,7 +537,7 @@
       }
     }
 
-    // ===== Data =====
+    // ===== Data (Firestore) =====
     const markersCol = collection(db, "markers");
 
     function layerFor(type){
@@ -564,7 +566,9 @@
         setMarkerPopup(m);
         m._marker.on('dragend', async (e) => {
           const pos = e.target.getLatLng();
-          await updateDoc(doc(db, "markers", m.id), { y: pos.lat, x: pos.lng, updatedAt: serverTimestamp() });
+          try{
+            await updateDoc(doc(db, "markers", m.id), { y: pos.lat, x: pos.lng, updatedAt: serverTimestamp() });
+          }catch(err){ alert("Failed to save position: " + (err?.message||err)); }
         });
       } else {
         const oldType = (m.type || "apartment").toLowerCase();
@@ -691,6 +695,7 @@
       setLockedUI(false);
     });
     document.getElementById("lockBtn").addEventListener("click", async () => { try { await signOut(auth); } catch{} setLockedUI(true); });
+    document.getElementById("editMode").addEventListener("change", applyEditMode);
 
     // ===== Changelog & Stats =====
     const REPO_OWNER = "equestrix"; const REPO_NAME  = "Apartment-Map";
@@ -739,6 +744,173 @@
           <p><strong>Last updated:</strong> ${last}</p>
         </div>`;
     }
+
+    // ===== Add / Edit Modals =====
+    let pendingLatLng = null;
+
+    function renderLinkFields(type, entry){
+      const t = (type||"apartment").toLowerCase();
+      let html = "";
+      if (t === "apartment"){
+        const shabby = entry?.shabby || entryLinks(entry).find(l=>/shabby/i.test(l.label))?.url || "";
+        const nice   = entry?.nice   || entryLinks(entry).find(l=>/nice/i.test(l.label))?.url   || "";
+        html = `
+          <div class="link-row"><label>Shabby</label><input id="f-shabby" type="url" placeholder="https://imgur.com/a/..." value="${shabby}"></div>
+          <div class="link-row"><label>Nice</label><input id="f-nice" type="url" placeholder="https://imgur.com/a/..." value="${nice}"></div>
+        `;
+      } else if (t === "office" || t === "motel"){
+        const url = (entry?.links?.[0]?.url) || "";
+        const label = (t === "office") ? "Office" : "Album";
+        html = `<div class="link-row"><label>${label}</label><input id="f-single" type="url" placeholder="https://imgur.com/a/..." value="${url}"></div>`;
+      } else { // penthouse (1–8)
+        const links = Array.isArray(entry?.links) ? entry.links : [];
+        const count = Math.max(links.length, 2);
+        let rows = "";
+        for (let i=0;i<Math.min(Math.max(count,2),8);i++){
+          const Lk = links[i] || { label:"Album "+(i+1), url:"" };
+          rows += `
+            <div class="grid-2">
+              <input class="ph-label" data-i="${i}" type="text" placeholder="Album ${i+1} title" value="${Lk.label||""}">
+              <input class="ph-url"   data-i="${i}" type="url"  placeholder="https://imgur.com/a/..." value="${Lk.url||""}">
+            </div>`;
+        }
+        html = rows + `<div class="muted">You can add more rows later by editing.</div>`;
+      }
+      linksArea.innerHTML = html;
+    }
+
+    function openAddModal(latlng){
+      pendingLatLng = latlng;
+      fName.value = "";
+      fType.value = "apartment";
+      renderLinkFields("apartment", null);
+      coordsNote.textContent = `Will be placed at x=${latlng.lng.toFixed(1)}, y=${latlng.lat.toFixed(1)}.`;
+      addModal.classList.add("show");
+    }
+    function closeAddModal(){
+      addModal.classList.remove("show");
+      pendingLatLng = null;
+    }
+
+    fType.addEventListener("change", () => renderLinkFields(fType.value, null));
+    btnCancel.addEventListener("click", () => closeAddModal());
+    btnSave.addEventListener("click", async () => {
+      if (!pendingLatLng) return;
+      const { lat, lng } = pendingLatLng;
+      const name = (fName.value||"").trim();
+      const type = fType.value;
+      if (!name){ alert("Name is required."); return; }
+
+      let links = [], shabby="", nice="";
+      if (type === "apartment"){
+        shabby = document.getElementById("f-shabby").value.trim();
+        nice   = document.getElementById("f-nice").value.trim();
+      } else if (type === "office" || type === "motel"){
+        const url = document.getElementById("f-single").value.trim();
+        if (url) links.push({ label: type==="office" ? "Office" : "Album", url });
+      } else {
+        const lbls = Array.from(addModal.querySelectorAll(".ph-label"));
+        const urls = Array.from(addModal.querySelectorAll(".ph-url"));
+        for (let i=0;i<Math.min(lbls.length, urls.length);i++){
+          const label=(lbls[i].value||"").trim(), url=(urls[i].value||"").trim();
+          if (url) links.push({ label: label||("Album "+(i+1)), url });
+        }
+      }
+
+      try{
+        await addDoc(collection(db,"markers"), {
+          name, type, links, x: lng, y: lat,
+          shabby: (type==="apartment") ? (shabby||"") : "",
+          nice:   (type==="apartment") ? (nice  ||"") : "",
+          createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+        });
+        closeAddModal(); toast("Property added.");
+      }catch(err){
+        console.error("[add] failed:", err);
+        alert("Failed to add property: " + (err?.message || err));
+      }
+    });
+
+    // Edit modal
+    function openEditModal(entry){
+      editingEntry = entry;
+      const lks = entryLinks(entry);
+      const t = (entry.type||"apartment").toLowerCase();
+
+      let html = `
+        <div class="row"><label><span>Name</span>
+          <input id="e-name" type="text" value="${(entry.name||"").replace(/"/g,'&quot;')}"></label></div>
+        <div class="row"><label><span>Type</span>
+          <select id="e-type">
+            <option value="apartment"${t==="apartment"?" selected":""}>Apartment</option>
+            <option value="office"${t==="office"?" selected":""}>Office</option>
+            <option value="motel"${t==="motel"?" selected":""}>Motel</option>
+            <option value="penthouse"${t==="penthouse"?" selected":""}>Penthouse</option>
+          </select></label></div>
+      `;
+
+      if (t === "apartment"){
+        let shabby = entry.shabby || lks.find(x=>/shabby/i.test(x.label))?.url || "";
+        let nice   = entry.nice   || lks.find(x=>/nice/i.test(x.label))?.url   || "";
+        html += `
+          <div class="link-row"><label>Shabby</label><input id="e-shabby" type="url" value="${shabby}"></div>
+          <div class="link-row"><label>Nice</label><input id="e-nice" type="url" value="${nice}"></div>
+        `;
+      } else if (t === "office" || t === "motel"){
+        const url = (lks[0]?.url)||"";
+        const label = (t==="office")?"Office":"Album";
+        html += `<div class="link-row"><label>${label}</label><input id="e-single" type="url" value="${url}"></div>`;
+      } else { // penthouse
+        const rows = (lks.length ? lks : [{label:"Album 1",url:""},{label:"Album 2",url:""}])
+          .slice(0,8)
+          .map((Lk,i)=>`
+            <div class="grid-2">
+              <input class="pe-label" data-i="${i}" type="text" placeholder="Album ${i+1} title" value="${(Lk.label||"").replace(/"/g,'&quot;')}">
+              <input class="pe-url"   data-i="${i}" type="url"  placeholder="https://imgur.com/a/..." value="${(Lk.url||"").replace(/"/g,'&quot;')}">
+            </div>`).join("");
+        html += rows;
+      }
+
+      html += `<div class="muted">Drag the marker to move it while Edit mode is on.</div>`;
+      editBody.innerHTML = html;
+      editModal.classList.add("show");
+    }
+
+    editCancel.addEventListener("click", () => { editModal.classList.remove("show"); editingEntry=null; });
+    editSave.addEventListener("click", async () => {
+      if (!editingEntry) return;
+      const name = (document.getElementById("e-name").value||"").trim();
+      const type = (document.getElementById("e-type").value||"apartment").toLowerCase();
+
+      let links = [], shabby="", nice="";
+      if (type === "apartment"){
+        shabby = (document.getElementById("e-shabby").value||"").trim();
+        nice   = (document.getElementById("e-nice").value||"").trim();
+      } else if (type === "office" || type === "motel"){
+        const url = (document.getElementById("e-single").value||"").trim();
+        if (url) links.push({ label: type==="office" ? "Office" : "Album", url });
+      } else {
+        const lbls = Array.from(editModal.querySelectorAll(".pe-label"));
+        const urls = Array.from(editModal.querySelectorAll(".pe-url"));
+        for (let i=0;i<Math.min(lbls.length, urls.length);i++){
+          const label=(lbls[i].value||"").trim(), url=(urls[i].value||"").trim();
+          if (url) links.push({ label: label||("Album "+(i+1)), url });
+        }
+      }
+
+      try{
+        await updateDoc(doc(db,"markers",editingEntry.id),{
+          name, type, links,
+          shabby: (type==="apartment") ? (shabby||"") : "",
+          nice:   (type==="apartment") ? (nice  ||"") : "",
+          updatedAt: serverTimestamp()
+        });
+        editModal.classList.remove("show"); editingEntry=null;
+      }catch(err){
+        console.error("[edit] failed:", err);
+        alert("Failed to save changes: " + (err?.message||err));
+      }
+    });
 
     // ===== Boot =====
     tryLoadImage();
