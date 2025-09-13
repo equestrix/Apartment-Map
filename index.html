@@ -7,16 +7,12 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin />
   <style>
     :root{
-      --main:#93c47d;       /* header / brand (darker green) */
-      --secondary:#b6d7a8;  /* middle green */
-      --accent:#d9ead3;     /* lightest green (cards / popups) */
-      --sea:#0fa8d2;        /* page/map bg (ocean) */
-      --ink:#111; --muted:#666; --paper:#fff;
+      --main:#93c47d; --secondary:#b6d7a8; --accent:#d9ead3;
+      --sea:#0fa8d2; --ink:#111;
     }
     html,body{ height:100%; margin:0; background:var(--sea); }
     .leaflet-container{ background:var(--sea); }
 
-    /* Layout */
     #map{ position:absolute; inset:56px 0 0 0; display:none; }
     #toolbar{
       position:fixed; inset:0 0 auto 0; height:56px;
@@ -35,7 +31,6 @@
     }
     #toolbar button:hover{ filter:brightness(.97); color:#111; }
 
-    /* Badges */
     #status{
       position:fixed; bottom:8px; left:10px; font:13px/1.3 system-ui; color:#111;
       background:rgba(255,255,255,.9); padding:4px 8px; border-radius:6px; z-index:1200;
@@ -47,7 +42,6 @@
       padding:2px 6px; border-radius:4px; z-index:1200;
     }
 
-    /* Settings menu */
     #settings{ margin-left:auto; position:relative; }
     #settingsBtn{ background:#fff; color:#111; }
     #settingsMenu{
@@ -62,13 +56,12 @@
     }
     #settingsMenu button:hover{ background:#f2f2f2; color:#111; }
 
-    /* Modals */
     .modal{ position:fixed; inset:0; display:grid; place-items:center;
       background:rgba(0,0,0,.45); z-index:1500; opacity:0; pointer-events:none; transition:opacity .18s ease; }
     .modal.show{ opacity:1; pointer-events:auto; }
     .card{
       width:min(560px, calc(100vw - 24px)); max-height:85vh; overflow:auto;
-      background:var(--secondary); color:var(--ink); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.25);
+      background:var(--secondary); color:#111; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.25);
       font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
       transform:translateY(6px); transition:transform .18s ease;
     }
@@ -81,19 +74,12 @@
     .btn.ghost{ background:#eee; color:#111; }
     .row{ display:grid; gap:6px; }
     .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-    label span{ font-weight:600; font-size:13px; }
     input[type="text"], input[type="url"], input[type="number"], select{
       width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:8px; font:14px system-ui; background:#fff; color:#111;
     }
     .muted{ color:#333; font-size:12px; }
     .link-row{ display:grid; grid-template-columns:1fr 2fr; gap:8px; align-items:center; }
-    .modal .close-x{
-      position:absolute; right:10px; top:8px; width:28px; height:28px; border-radius:6px;
-      background:#fff; color:#111; border:0; cursor:pointer; font-weight:700;
-    }
-    .modal .close-x:hover{ filter:brightness(.95); }
 
-    /* Popup restyle */
     .leaflet-popup-content-wrapper{ background:var(--accent); border:2px solid var(--main); border-radius:10px; }
     .leaflet-popup-tip{ background:var(--accent); }
     .popup h3{
@@ -105,20 +91,18 @@
     .popup a{ color:#003366; font-weight:600; text-decoration:none; border-bottom:1px solid transparent; }
     .popup a:hover{ border-bottom-color:#003366; }
 
-    /* Controls position (zoom bottom-left) */
     .leaflet-control-zoom{
       position:absolute !important; left:10px !important; bottom:48px !important;
       top:auto !important; margin:0 !important;
     }
 
-    /* Area label style */
     .area-label{
       background:rgba(255,255,255,.85);
       padding:2px 6px; border-radius:6px; font:12px/1.2 system-ui; color:#111;
       border:1px solid rgba(0,0,0,.1); white-space:nowrap;
     }
 
-    /* Left “Layers” button (Google Maps style) */
+    /* Bottom-left Google-style “Layers” control */
     .leaflet-control.layers-toggle { margin:0 0 8px 10px; }
     .leaflet-control.layers-toggle .btn{
       display:flex; align-items:center; gap:6px;
@@ -128,7 +112,7 @@
     }
     .leaflet-control.layers-toggle .btn:hover{ background:#f7f7f7; }
     .leaflet-control.layers-toggle .panel{
-      position:absolute; left:0; bottom:44px; /* just above the button */
+      position:absolute; left:0; bottom:44px;
       background:#fff; color:#111; border-radius:10px; border:1px solid #ddd;
       box-shadow:0 12px 24px rgba(0,0,0,.2);
       padding:8px 10px; min-width:180px; display:none;
@@ -145,7 +129,6 @@
       <strong>Property Map</strong>
     </div>
 
-    <!-- Hidden until unlocked -->
     <label id="addWrap" style="display:none" title="Enable click-to-add mode"><input type="checkbox" id="addMode"> Add</label>
     <label id="editWrap" style="display:none" title="Enable drag/edit mode"><input type="checkbox" id="editMode"> Edit</label>
 
@@ -170,68 +153,45 @@
   <div id="status">Loading map…</div>
   <div id="version"></div>
 
-  <!-- Add Modal -->
-  <div id="addModal" class="modal" aria-hidden="true">
-    <div class="card" role="dialog" aria-modal="true" aria-labelledby="addTitle">
-      <header id="addTitle">Add Property</header>
-      <main>
-        <div class="row">
-          <label><span>Name</span>
-            <input id="f-name" type="text" placeholder="e.g., Eclipse Towers Apt. 3">
-          </label>
-        </div>
-        <div class="grid-2">
-          <label><span>Type</span>
-            <select id="f-type">
-              <option value="apartment" selected>Apartment</option>
-              <option value="office">Office</option>
-              <option value="motel">Motel</option>
-              <option value="penthouse">Penthouse</option>
-            </select>
-          </label>
-          <div class="row"><span class="muted">Type controls link fields.</span></div>
-        </div>
-        <div id="linksArea" class="row"></div>
-        <div class="muted" id="coordsNote">Will be placed where you clicked.</div>
-      </main>
-      <footer>
-        <button id="btnCancel" class="btn ghost">Cancel</button>
-        <button id="btnSave" class="btn primary">Save</button>
-      </footer>
-    </div>
-  </div>
+  <!-- Add / Edit / Changelog / Stats modals (same as before) -->
+  <div id="addModal" class="modal" aria-hidden="true"><div class="card">
+    <header>Add Property</header>
+    <main>
+      <div class="row"><label><span>Name</span><input id="f-name" type="text" placeholder="e.g., Eclipse Towers Apt. 3"></label></div>
+      <div class="grid-2">
+        <label><span>Type</span>
+          <select id="f-type">
+            <option value="apartment" selected>Apartment</option>
+            <option value="office">Office</option>
+            <option value="motel">Motel</option>
+            <option value="penthouse">Penthouse</option>
+          </select>
+        </label>
+        <div class="row"><span class="muted">Type controls link fields.</span></div>
+      </div>
+      <div id="linksArea" class="row"></div>
+      <div class="muted" id="coordsNote">Will be placed where you clicked.</div>
+    </main>
+    <footer><button id="btnCancel" class="btn ghost">Cancel</button><button id="btnSave" class="btn primary">Save</button></footer>
+  </div></div>
 
-  <!-- Edit Modal -->
-  <div id="editModal" class="modal" aria-hidden="true">
-    <div class="card" role="dialog" aria-modal="true" aria-labelledby="editTitle">
-      <header id="editTitle">Edit Property</header>
-      <main id="editBody"></main>
-      <footer>
-        <button id="editCancel" class="btn ghost">Cancel</button>
-        <button id="editSave" class="btn primary">Save</button>
-      </footer>
-    </div>
-  </div>
+  <div id="editModal" class="modal" aria-hidden="true"><div class="card">
+    <header>Edit Property</header>
+    <main id="editBody"></main>
+    <footer><button id="editCancel" class="btn ghost">Cancel</button><button id="editSave" class="btn primary">Save</button></footer>
+  </div></div>
 
-  <!-- Changelog Modal -->
-  <div id="changelogModal" class="modal" aria-hidden="true">
-    <div class="card" role="dialog" aria-modal="true" aria-labelledby="chgTitle">
-      <header id="chgTitle">Changelog
-        <button id="chgCloseX" class="close-x" aria-label="Close">×</button>
-      </header>
-      <main id="chgBody"><div style="padding:14px">Loading commits…</div></main>
-      <footer><button id="chgClose" class="btn primary">Close</button></footer>
-    </div>
-  </div>
+  <div id="changelogModal" class="modal" aria-hidden="true"><div class="card">
+    <header>Changelog <button id="chgCloseX" class="btn ghost" style="position:absolute;right:10px;top:8px">×</button></header>
+    <main id="chgBody"><div style="padding:14px">Loading commits…</div></main>
+    <footer><button id="chgClose" class="btn primary">Close</button></footer>
+  </div></div>
 
-  <!-- Stats Modal -->
-  <div id="statsModal" class="modal" aria-hidden="true">
-    <div class="card" role="dialog" aria-modal="true" aria-labelledby="statTitle">
-      <header id="statTitle">Statistics</header>
-      <main id="statBody"></main>
-      <footer><button id="statClose" class="btn primary">Close</button></footer>
-    </div>
-  </div>
+  <div id="statsModal" class="modal" aria-hidden="true"><div class="card">
+    <header>Statistics</header>
+    <main id="statBody"></main>
+    <footer><button id="statClose" class="btn primary">Close</button></footer>
+  </div></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
 
@@ -243,13 +203,11 @@
       enableIndexedDbPersistence, getDocsFromCache, getDocsFromServer
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-    // ===== Build / Version =====
-    const VERSION = "beta 1.1.1";
-    const VERSION_NOTE = "Fix marker clicks & Add/Edit; move to left Layers button with dropdown; overlay/areas toggles.";
+    const VERSION = "beta 1.1.2";
+    const VERSION_NOTE = "Fix marker click-pan; Layers button bottom-left; sync ready fallback.";
     document.getElementById("version").textContent = VERSION;
-    console.log("Dynasty 8 Map — " + VERSION + " — " + VERSION_NOTE);
 
-    // ===== Firebase =====
+    // Firebase
     const firebaseConfig = {
       apiKey: "AIzaSyCcfOML9FD1Q5vcoCb3NdIlFKtx3LAovBc",
       authDomain: "dynasty8-property-map.firebaseapp.com",
@@ -263,11 +221,10 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    // Auto sign in anonymously so reads always work
     try { await signInAnonymously(auth); } catch(e){ console.warn("[auth] anon failed:", e?.message||e); }
     try { await enableIndexedDbPersistence(db); } catch(e){ console.warn("[fs] persistence:", e?.message||e); }
 
-    // ===== DOM refs =====
+    // DOM
     const addModeEl  = document.getElementById("addMode");
     const editModeEl = document.getElementById("editMode");
     const addWrap    = document.getElementById("addWrap");
@@ -285,12 +242,10 @@
     const menuStats     = document.getElementById("menuStats");
     const menuToggleAreas = document.getElementById("menuToggleAreas");
 
-    // Modals
     const chgModal  = document.getElementById("changelogModal");
     const chgBody   = document.getElementById("chgBody");
     const chgClose  = document.getElementById("chgClose");
     const chgCloseX = document.getElementById("chgCloseX");
-
     const statModal = document.getElementById("statsModal");
     const statBody  = document.getElementById("statBody");
     const statClose = document.getElementById("statClose");
@@ -309,28 +264,25 @@
     const editSave   = document.getElementById("editSave");
     let editingEntry = null;
 
-    // ===== Config & State =====
+    // State
     const LOCAL_EDIT_PASSWORD = "D8D8D8";
     const MAP_CANDIDATES = ["map.jpg","map.jpeg","map.png"];
     let unlocked = false;
     let map, currentIconSize = 32;
     let imageWidth = 0, imageHeight = 0;
 
-    // Layers
     const groups = {
       apartment: L.layerGroup(), penthouse: L.layerGroup(),
       office: L.layerGroup(), motel: L.layerGroup()
     };
-    const markers = new Map(); // id -> { ... , _marker }
+    const markers = new Map();
     let latestUpdatedAtMillis = 0;
 
-    // Optional layers
-    let zonesOverlay = null;                 // overlay.png image overlay
-    const areaLabelsLayer = L.layerGroup();  // area name labels
+    let zonesOverlay = null;
+    const areaLabelsLayer = L.layerGroup();
 
-    function toast(m){ hintEl.textContent = m; }
+    const toast = (m)=>{ hintEl.textContent = m; };
 
-    // ===== Icons by type =====
     function iconFor(entry, size){
       const t = (entry.type || "apartment").toLowerCase();
       const files = {
@@ -343,7 +295,6 @@
       return L.icon({ iconUrl: files[t] || files.apartment, iconSize:[s,s], iconAnchor:[s/2,s/2], tooltipAnchor:[0,-s/2] });
     }
 
-    // ===== Links rendering =====
     function entryLinks(entry){
       if (entry?.links?.length) return entry.links;
       const arr = [];
@@ -390,6 +341,10 @@
         </div>`;
       entry._marker.bindPopup(html);
 
+      // stop map from panning on marker interactions
+      entry._marker.on('mousedown', (e)=>{ L.DomEvent.stopPropagation(e); });
+      entry._marker.on('click', (e)=>{ L.DomEvent.stopPropagation(e); if (entry._marker.openPopup) entry._marker.openPopup(); });
+
       entry._marker.off('popupopen').on('popupopen', (e) => {
         if (!(unlocked && editModeEl.checked)) return;
         const el = e.popup.getElement(); if (!el) return;
@@ -418,14 +373,14 @@
       unlocked = !lock;
       document.getElementById("unlockBtn").style.display = lock ? "" : "none";
       document.getElementById("lockBtn").style.display   = lock ? "none" : "";
-      addWrap.style.display   = lock ? "none" : "";
-      editWrap.style.display  = lock ? "none" : "";
+      document.getElementById("addWrap").style.display   = lock ? "none" : "";
+      document.getElementById("editWrap").style.display  = lock ? "none" : "";
       if (lock) editModeEl.checked = false;
       applyEditMode();
       toast(lock ? "Locked (view-only)" : "Edit unlocked");
     }
 
-    // ===== Map (single image) =====
+    // Map
     function init(imageUrl, w, h){
       imageWidth = w; imageHeight = h;
       const bounds = L.latLngBounds([[0,0],[h,w]]);
@@ -435,31 +390,29 @@
       mapEl.style.display = "block";
       statusEl.textContent = "Image map loaded";
 
-      // Marker groups
+      // groups
       groups.apartment.addTo(map); groups.penthouse.addTo(map);
       groups.office.addTo(map); groups.motel.addTo(map);
 
-      // Icon scale on zoom
       map.on("zoomend", () => {
         const z = map.getZoom();
         currentIconSize = Math.max(16, Math.min(48, z * 4));
         markers.forEach(m => { if (m._marker) m._marker.setIcon(iconFor(m)); });
       });
 
-      // Add marker flow
       map.on("click", (e) => {
         if (!(unlocked && addModeEl.checked)) return;
         if (document.querySelector("#addModal.show")) return;
         openAddModal(e.latlng);
       });
 
-      // Left “Layers” control (Overlay + Area names)
+      // Bottom-left Layers control
       const LayersControl = L.Control.extend({
         position: 'bottomleft',
         onAdd: function(){
           const div = L.DomUtil.create('div', 'leaflet-control layers-toggle');
-          const btn = L.DomUtil.create('a', 'btn', div);
-          btn.href = '#'; btn.title = 'Map layers'; btn.textContent = 'Layers';
+          const btn = L.DomUtil.create('button', 'btn', div);
+          btn.type = 'button'; btn.title = 'Map layers'; btn.textContent = 'Layers';
 
           const panel = L.DomUtil.create('div', 'panel', div);
           panel.innerHTML = `
@@ -467,27 +420,21 @@
             <label><input type="checkbox" id="chkAreas"> Area names</label>
           `;
 
-          // Prevent map drag/zoom when interacting with control
           L.DomEvent.disableClickPropagation(div);
           L.DomEvent.on(btn, 'click', (ev) => {
             ev.preventDefault(); ev.stopPropagation();
             panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
           });
-
-          // Close when clicking elsewhere on map
           L.DomEvent.on(map.getContainer(), 'click', () => { panel.style.display = 'none'; });
 
-          // Wire toggles
           setTimeout(() => {
             const chkOverlay = panel.querySelector('#chkOverlay');
             const chkAreas   = panel.querySelector('#chkAreas');
-
             chkOverlay.addEventListener('change', () => {
               if (!zonesOverlay){ toast("No overlay found."); chkOverlay.checked = false; return; }
               if (chkOverlay.checked){ zonesOverlay.addTo(map); toast("Zones overlay shown"); }
               else { map.removeLayer(zonesOverlay); toast("Zones overlay hidden"); }
             });
-
             chkAreas.addEventListener('change', () => {
               if (chkAreas.checked){ areaLabelsLayer.addTo(map); toast("Area names shown"); }
               else { map.removeLayer(areaLabelsLayer); toast("Area names hidden"); }
@@ -499,14 +446,12 @@
       });
       map.addControl(new LayersControl());
 
-      // Lock UI, load optional layers, then data
       setLockedUI(true);
       tryLoadOverlay();
       tryLoadAreas();
       wireData();
     }
 
-    // Single-image loader
     function tryLoadImage(i=0){
       if (i >= MAP_CANDIDATES.length){
         statusEl.textContent = "Could not find map.jpg/jpeg/png next to index.html.";
@@ -519,7 +464,6 @@
       img.src = src;
     }
 
-    // Overlay loader (overlay.png)
     function tryLoadOverlay(){
       const test = new Image();
       test.onload = () => {
@@ -530,14 +474,12 @@
       test.src = "overlay.png?v="+Date.now();
     }
 
-    // Area names loader (areas.json)
     async function tryLoadAreas(){
       try {
         const res = await fetch("areas.json?v="+Date.now(), { cache:"no-store" });
         if (!res.ok) throw new Error(res.status);
-        const areas = await res.json(); // expected: [{ name, x, y }, ...]
+        const areas = await res.json();
         if (!Array.isArray(areas)) throw new Error("areas.json must be an array");
-
         areaLabelsLayer.clearLayers();
         areas.forEach(a => {
           if (typeof a.x !== "number" || typeof a.y !== "number" || !a.name) return;
@@ -549,7 +491,7 @@
       }
     }
 
-    // ===== Data: cache-first + live updates =====
+    // Data
     const markersCol = collection(db, "markers");
 
     function layerFor(type){
@@ -565,8 +507,12 @@
       if (!m){
         m = { ...entry };
         m._marker = L.marker([m.y, m.x], {
-          draggable: !!(unlocked && editModeEl.checked), autoPan: true, icon: iconFor(m)
+          draggable: !!(unlocked && editModeEl.checked),
+          autoPan: true, icon: iconFor(m), keyboard:false, bubblingMouseEvents:false
         }).bindTooltip(m.name || "Property", {direction:"top", offset:[0,-10]});
+        // stop map pan on marker down/click
+        m._marker.on('mousedown', (e)=>{ L.DomEvent.stopPropagation(e); });
+        m._marker.on('click', (e)=>{ L.DomEvent.stopPropagation(e); if (m._marker.openPopup) m._marker.openPopup(); });
         layerFor(t).addLayer(m._marker);
         markers.set(entry.id, m);
         setMarkerPopup(m);
@@ -574,8 +520,6 @@
           const pos = e.target.getLatLng();
           await updateDoc(doc(db, "markers", m.id), { y: pos.lat, x: pos.lng, updatedAt: serverTimestamp() });
         });
-        // Enable popup clicks
-        m._marker.on('click', () => { if (m._marker && m._marker.openPopup) m._marker.openPopup(); });
       } else {
         const oldType = (m.type || "apartment").toLowerCase();
         if (oldType !== t && m._marker){ layerFor(oldType).removeLayer(m._marker); layerFor(t).addLayer(m._marker); }
@@ -596,62 +540,39 @@
     }
 
     async function wireData(){
-      // Cache first
+      let sawFirstSnapshot = false;
+      // cache first
       try {
         const cached = await getDocsFromCache(markersCol);
         if (!cached.empty){
-          cached.forEach(d => {
-            const v = d.data()||{}; let ms=0;
-            if (v.updatedAt){ try {
-              if (typeof v.updatedAt.toDate === "function") ms = v.updatedAt.toDate().getTime();
-              else if (v.updatedAt.seconds) ms = v.updatedAt.seconds*1000 + Math.floor((v.updatedAt.nanoseconds||0)/1e6);
-            } catch{} }
-            createOrUpdateMarker({ id:d.id, name:v.name||"Property", x:v.x, y:v.y, type:v.type||"apartment",
-              links:Array.isArray(v.links)?v.links:[], shabby:v.shabby||"", nice:v.nice||"", updatedAt:ms });
-          });
+          cached.forEach(d => pushDoc(d));
           statusEl.textContent = "Loaded " + markers.size + " properties (cache)";
           hintEl.textContent = "Syncing…";
           map.fire("zoomend");
         }
       } catch {}
-
-      // Server prefetch if needed
+      // server bootstrap if none
       if (markers.size === 0){
         try {
           const serverSnap = await getDocsFromServer(markersCol);
           if (!serverSnap.empty){
-            serverSnap.forEach(d => {
-              const v = d.data()||{}; let ms=0;
-              if (v.updatedAt){ try {
-                if (typeof v.updatedAt.toDate === "function") ms = v.updatedAt.toDate().getTime();
-                else if (v.updatedAt.seconds) ms = v.updatedAt.seconds*1000 + Math.floor((v.updatedAt.nanoseconds||0)/1e6);
-              } catch{} }
-              createOrUpdateMarker({ id:d.id, name:v.name||"Property", x:v.x, y:v.y, type:v.type||"apartment",
-                links:Array.isArray(v.links)?v.links:[], shabby:v.shabby||"", nice:v.nice||"", updatedAt:ms });
-            });
+            serverSnap.forEach(d => pushDoc(d));
             statusEl.textContent = "Loaded " + markers.size + " properties (server)";
             hintEl.textContent = "Ready";
+            sawFirstSnapshot = true;
             map.fire("zoomend");
           }
         } catch(e){ console.warn("[fs] server prefetch:", e?.message||e); }
       }
-
-      // Live updates
+      // live
       onSnapshot(markersCol, {
         includeMetadataChanges: true,
         next: (snap) => {
-          let changed=false;
+          let changed=false; sawFirstSnapshot = true;
           snap.docChanges().forEach(chg => {
-            const d = chg.doc, v=d.data()||{}; let ms=0;
-            if (v.updatedAt){ try {
-              if (typeof v.updatedAt.toDate === "function") ms = v.updatedAt.toDate().getTime();
-              else if (v.updatedAt.seconds) ms = v.updatedAt.seconds*1000 + Math.floor((v.updatedAt.nanoseconds||0)/1e6);
-            } catch{} }
-            const entry = { id:d.id, name:v.name||"Property", x:v.x, y:v.y, type:v.type||"apartment",
-              links:Array.isArray(v.links)?v.links:[], shabby:v.shabby||"", nice:v.nice||"", updatedAt:ms };
-            if (chg.type==="added" || chg.type==="modified"){ createOrUpdateMarker(entry); changed=true; }
-            else if (chg.type==="removed"){ removeMarker(d.id); changed=true; }
-            if (ms && ms > latestUpdatedAtMillis) latestUpdatedAtMillis = ms;
+            const d = chg.doc;
+            if (chg.type==="removed"){ removeMarker(d.id); changed=true; return; }
+            changed = pushDoc(d) || changed;
           });
           if (changed){
             statusEl.textContent = "Loaded " + markers.size + " properties";
@@ -665,9 +586,24 @@
           hintEl.textContent = "Check Firestore rules / auth";
         }
       });
+      // fallback in case snapshot is slow
+      setTimeout(() => { if (!sawFirstSnapshot) hintEl.textContent = "Ready"; }, 4000);
     }
 
-    // ===== Settings actions =====
+    function pushDoc(d){
+      const v = d.data()||{}; let ms=0;
+      if (v.updatedAt){ try {
+        if (typeof v.updatedAt.toDate === "function") ms = v.updatedAt.toDate().getTime();
+        else if (v.updatedAt.seconds) ms = v.updatedAt.seconds*1000 + Math.floor((v.updatedAt.nanoseconds||0)/1e6);
+      } catch{} }
+      const entry = { id:d.id, name:v.name||"Property", x:v.x, y:v.y, type:v.type||"apartment",
+        links:Array.isArray(v.links)?v.links:[], shabby:v.shabby||"", nice:v.nice||"", updatedAt:ms };
+      const before = markers.has(entry.id);
+      createOrUpdateMarker(entry);
+      return !before || true;
+    }
+
+    // Settings
     settingsBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       const open = settingsMenu.style.display === "block";
@@ -675,7 +611,6 @@
     });
     document.addEventListener("click", () => { settingsMenu.style.display = "none"; });
 
-    // Export
     menuExport.addEventListener("click", () => {
       settingsMenu.style.display = "none";
       const arr = [];
@@ -688,7 +623,12 @@
       document.body.appendChild(a); a.click(); URL.revokeObjectURL(url); a.remove();
     });
 
-    // ===== Unlock/lock =====
+    document.getElementById("menuToggleAreas").addEventListener("click", () => {
+      settingsMenu.style.display = "none";
+      if (map.hasLayer(areaLabelsLayer)) { map.removeLayer(areaLabelsLayer); toast("Area names hidden"); }
+      else { areaLabelsLayer.addTo(map); toast("Area names shown"); }
+    });
+
     document.getElementById("unlockBtn").addEventListener("click", async () => {
       const pass = prompt("Password:"); if (pass !== LOCAL_EDIT_PASSWORD){ alert("Wrong password."); return; }
       try { if (!auth.currentUser) await signInAnonymously(auth); } catch {}
@@ -697,13 +637,13 @@
     document.getElementById("lockBtn").addEventListener("click", async () => { try { await signOut(auth); } catch{} setLockedUI(true); });
     document.getElementById("editMode").addEventListener("change", applyEditMode);
 
-    // ===== Boot =====
     (function boot(){ tryLoadImage(); })();
 
-    // ===== Add/Edit modal logic (same as 1.0.9) =====
-    let pendingLatLng = null, isAddModalOpen = false, addDirty = false, editDirty = false;
+    // ---- Add/Edit modal logic (same as before) ----
+    let pendingLatLng = null, addDirty = false, editDirty = false;
 
     function buildLinksFields(type){
+      const linksArea = document.getElementById("linksArea");
       linksArea.innerHTML = "";
       if (type === "apartment") {
         linksArea.innerHTML =
@@ -746,25 +686,26 @@
     }
 
     function openAddModal(latlng){
-      pendingLatLng = latlng; isAddModalOpen = true; addDirty = false;
-      coordsNote.textContent = `Placing at x=${latlng.lng.toFixed(1)}, y=${latlng.lat.toFixed(1)}`;
-      fName.value = ""; fType.value = "apartment"; buildLinksFields("apartment");
-      addModal.classList.add("show"); setTimeout(() => fName.focus(), 30);
+      pendingLatLng = latlng; addDirty = false;
+      document.getElementById("coordsNote").textContent = `Placing at x=${latlng.lng.toFixed(1)}, y=${latlng.lat.toFixed(1)}`;
+      document.getElementById("f-name").value = ""; document.getElementById("f-type").value = "apartment"; buildLinksFields("apartment");
+      document.getElementById("addModal").classList.add("show"); setTimeout(() => document.getElementById("f-name").focus(), 30);
     }
     function closeAddModal(force){
-      if (!force && addDirty && (fName.value.trim() || linksArea.querySelector("input")?.value)){
+      const fName = document.getElementById("f-name");
+      if (!force && addDirty && (fName.value.trim() || document.querySelector("#linksArea input")?.value)){
         const ok = confirm("You have unsaved changes. Close without saving?"); if (!ok) return;
       }
-      addModal.classList.remove("show");
-      pendingLatLng = null; isAddModalOpen = false; addDirty = false;
+      document.getElementById("addModal").classList.remove("show");
+      pendingLatLng = null; addDirty = false;
     }
-    btnCancel.addEventListener("click", () => closeAddModal(false));
-    fType.addEventListener("change", e => { addDirty = true; buildLinksFields(e.target.value); });
+    document.getElementById("btnCancel").addEventListener("click", () => closeAddModal(false));
+    document.getElementById("f-type").addEventListener("change", e => { addDirty = true; buildLinksFields(e.target.value); });
 
-    btnSave.addEventListener("click", async () => {
+    document.getElementById("btnSave").addEventListener("click", async () => {
       if (!pendingLatLng) { closeAddModal(true); return; }
-      const name = (fName.value||"").trim(); if (!name){ alert("Please enter a name."); return; }
-      const type = fType.value, lat = pendingLatLng.lat, lng = pendingLatLng.lng;
+      const name = (document.getElementById("f-name").value||"").trim(); if (!name){ alert("Please enter a name."); return; }
+      const type = document.getElementById("f-type").value, lat = pendingLatLng.lat, lng = pendingLatLng.lng;
       const links = []; let shabby="", nice="";
       if (type === "apartment"){
         shabby = (document.getElementById("f-shabby").value||"").trim();
@@ -778,7 +719,7 @@
         const um = (document.getElementById("f-motel").value||"").trim();
         if (um) links.push({ label:"Album", url:um });
       } else if (type === "penthouse"){
-        const rows = linksArea.querySelectorAll(".link-row");
+        const rows = document.querySelectorAll("#ph-rows .link-row");
         rows.forEach((row,i) => {
           const label = (row.querySelector(".ph-label").value || `Album ${i+1}`).trim();
           const url   = (row.querySelector(".ph-url").value   || "").trim();
@@ -794,7 +735,9 @@
       closeAddModal(true); toast("Property added.");
     });
 
+    // Edit modal
     function buildEditFields(type, entry){
+      const editBody = document.getElementById("editBody");
       editBody.innerHTML = ""; editDirty = false;
       const nameRow = document.createElement("div");
       nameRow.className = "row";
@@ -873,24 +816,24 @@
         shabby: entry.shabby || "", nice: entry.nice || ""
       };
       buildEditFields(editingEntry.type, editingEntry);
-      editModal.classList.add("show");
+      document.getElementById("editModal").classList.add("show");
       function onTypeChange(e){
         if (e && e.target && e.target.id === "e-type"){
           buildEditFields(e.target.value, editingEntry);
-          editBody.addEventListener("change", onTypeChange, { once:true });
+          document.getElementById("editBody").addEventListener("change", onTypeChange, { once:true });
         }
       }
-      editBody.addEventListener("change", onTypeChange, { once:true });
+      document.getElementById("editBody").addEventListener("change", onTypeChange, { once:true });
     }
 
-    editCancel.addEventListener("click", () => {
+    document.getElementById("editCancel").addEventListener("click", () => {
       if (editDirty){
         const ok = confirm("You have unsaved changes. Close without saving?"); if (!ok) return;
       }
-      editModal.classList.remove("show"); editingEntry=null; editDirty=false;
+      document.getElementById("editModal").classList.remove("show"); editingEntry=null; editDirty=false;
     });
 
-    editSave.addEventListener("click", async () => {
+    document.getElementById("editSave").addEventListener("click", async () => {
       if (!editingEntry) return;
       const name = (document.getElementById("e-name").value || "").trim();
       const type = document.getElementById("e-type").value;
@@ -907,7 +850,7 @@
         const um = (document.getElementById("e-motel").value||"").trim();
         if (um) links.push({ label:"Album", url:um });
       } else if (type==="penthouse"){
-        const rows = editBody.querySelectorAll("#e-phrows .link-row");
+        const rows = document.querySelectorAll("#e-phrows .link-row");
         rows.forEach((row,i) => {
           const label = (row.querySelector(".e-label").value || `Album ${i+1}`).trim();
           const url   = (row.querySelector(".e-url").value   || "").trim();
@@ -920,25 +863,25 @@
         nice:   (type==="apartment") ? (nice  ||"") : "",
         updatedAt: serverTimestamp()
       });
-      editModal.classList.remove("show"); editingEntry=null; editDirty=false;
+      document.getElementById("editModal").classList.remove("show"); editingEntry=null; editDirty=false;
     });
 
-    // Changelog & Stats (unchanged plumbing)
-    function escapeHtml(s){ const map={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}; return String(s).replace(/[&<>"]/g,c=>map[c]); }
+    // Changelog & Stats
     const REPO_OWNER = "equestrix"; const REPO_NAME  = "Apartment-Map";
+    function escapeHtml(s){ const map={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}; return String(s).replace(/[&<>"]/g,c=>map[c]); }
     function openChangelog(){
+      const chgBody = document.getElementById("chgBody");
       chgBody.innerHTML = '<div style="padding:14px">Loading commits…</div>';
-      chgModal.classList.add("show");
+      document.getElementById("changelogModal").classList.add("show");
       const cacheKey = "chg_" + REPO_OWNER + "_" + REPO_NAME;
       let cached=null; try { cached = sessionStorage.getItem(cacheKey); } catch {}
       if (cached){ chgBody.innerHTML = cached; return; }
-      const url = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits?per_page=20`;
-      fetch(url, { headers: { "Accept":"application/vnd.github+json" } })
+      fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits?per_page=20`, { headers: { "Accept":"application/vnd.github+json" } })
         .then(res => { if (!res.ok) throw new Error("GitHub API "+res.status); return res.json(); })
         .then(commits => {
           let html="";
-          for (let i=0;i<commits.length;i++){
-            const c = commits[i], commit=c.commit||{}, authorObj=commit.author||null;
+          for (const c of commits){
+            const commit=c.commit||{}, authorObj=commit.author||null;
             const authorName = authorObj?.name || c.author?.login || "Unknown";
             const msg = (commit.message||"").trim(); const parts = msg.split(/\r?\n/);
             const title = parts.shift() || "Commit"; const body = parts.join("\n").trim();
@@ -960,7 +903,7 @@
       const counts = { total:0, apartment:0, penthouse:0, office:0, motel:0 };
       markers.forEach(m => { counts.total++; const t=(m.type||"apartment").toLowerCase(); counts[t] = (counts[t]||0)+1; });
       const last = formatLastUpdated(latestUpdatedAtMillis);
-      statBody.innerHTML =
+      document.getElementById("statBody").innerHTML =
         `<div style="padding:14px">
           <p><strong>Total properties:</strong> ${counts.total}</p>
           <p>Apartments: ${counts.apartment||0}</p>
@@ -972,11 +915,19 @@
         </div>`;
     }
     document.getElementById("menuChangelog").addEventListener("click", () => { settingsMenu.style.display="none"; openChangelog(); });
-    document.getElementById("chgClose").addEventListener("click", () => chgModal.classList.remove("show"));
-    document.getElementById("chgCloseX").addEventListener("click", () => chgModal.classList.remove("show"));
-    document.getElementById("menuStats").addEventListener("click", () => { settingsMenu.style.display="none"; renderStats(); statModal.classList.add("show"); });
-    document.getElementById("statClose").addEventListener("click", () => { statModal.classList.remove("show"); });
+    document.getElementById("chgClose").addEventListener("click", () => document.getElementById("changelogModal").classList.remove("show"));
+    document.getElementById("chgCloseX").addEventListener("click", () => document.getElementById("changelogModal").classList.remove("show"));
+    document.getElementById("menuStats").addEventListener("click", () => { settingsMenu.style.display="none"; renderStats(); document.getElementById("statsModal").classList.add("show"); });
+    document.getElementById("statClose").addEventListener("click", () => { document.getElementById("statsModal").classList.remove("show"); });
 
+    // Unlock/lock
+    document.getElementById("unlockBtn").addEventListener("click", async () => {
+      const pass = prompt("Password:"); if (pass !== LOCAL_EDIT_PASSWORD){ alert("Wrong password."); return; }
+      try { if (!auth.currentUser) await signInAnonymously(auth); } catch {}
+      setLockedUI(false);
+    });
+    document.getElementById("lockBtn").addEventListener("click", async () => { try { await signOut(auth); } catch{} setLockedUI(true); });
+    document.getElementById("editMode").addEventListener("change", applyEditMode);
   </script>
 </body>
 </html>
