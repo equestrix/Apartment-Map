@@ -339,7 +339,10 @@
                 '</div>'
               : '' }
         </div>`;
-      entry._marker.bindPopup(html);
+      entry._marker.bindPopup(html, {
+  autoPan: false,       // <-- stop the map from shifting when popup opens
+  keepInView: false
+});
 
       // stop map from panning on marker interactions
       entry._marker.on('mousedown', (e)=>{ L.DomEvent.stopPropagation(e); });
