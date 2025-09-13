@@ -108,8 +108,8 @@
       border:1px solid rgba(0,0,0,.1); white-space:nowrap;
     }
 
-    /* Bottom-left Google-style “Layers” control */
-    .leaflet-bottom.leaflet-left .leaflet-control.layers-toggle { margin:0 0 8px 10px; }
+    /* Layers control — top-left, tucked under the banner */
+    .leaflet-top.leaflet-left .leaflet-control.layers-toggle { margin:64px 0 0 10px; }
     .leaflet-control.layers-toggle .btn{
       display:flex; align-items:center; gap:6px;
       background:#fff; color:#111; border-radius:8px; padding:8px 10px;
@@ -118,7 +118,7 @@
     }
     .leaflet-control.layers-toggle .btn:hover{ background:#f7f7f7; }
     .leaflet-control.layers-toggle .panel{
-      position:absolute; left:0; bottom:44px;
+      position:absolute; left:0; top:40px;
       background:#fff; color:#111; border-radius:10px; border:1px solid #ddd;
       box-shadow:0 12px 24px rgba(0,0,0,.2);
       padding:8px 10px; min-width:180px; display:none;
@@ -144,7 +144,7 @@
 
     <span id="hint">Loading…</span>
 
-    <div id="settings">
+    <div id="settings" style="margin-left:auto">
       <button id="settingsBtn" title="Open settings">⚙️ Settings</button>
       <div id="settingsMenu" role="menu" aria-hidden="true">
         <button id="menuExport"      title="Download markers.json">Export markers</button>
@@ -214,8 +214,8 @@
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ===== Build =====
-    const VERSION = "beta 1.1.4";
-    const VERSION_NOTE = "Center map on load; Layers bottom-left; disable popup auto-pan; keep click-prop fixes.";
+    const VERSION = "beta 1.1.5";
+    const VERSION_NOTE = "Center reliably; move Layers to top-left under banner; overlay enabled by default.";
     document.getElementById("version").textContent = VERSION;
 
     // ===== Firebase =====
@@ -281,6 +281,7 @@
     let unlocked = false;
     let map, currentIconSize = 32;
     let imageWidth = 0, imageHeight = 0;
+    let imageBounds = null;
 
     const groups = {
       apartment: L.layerGroup(), penthouse: L.layerGroup(),
@@ -392,20 +393,29 @@
       toast(lock ? "Locked (view-only)" : "Edit unlocked");
     }
 
-    // ===== Map init =====
-    let imageBounds = null;
+    // ===== Map init / Centering =====
     function init(imageUrl, w, h){
       imageWidth = w; imageHeight = h;
       imageBounds = L.latLngBounds([[0,0],[h,w]]);
       map = L.map("map", { crs:L.CRS.Simple, minZoom:-2, maxZoom:5, zoomControl:true, attributionControl:false });
-      L.imageOverlay(imageUrl, imageBounds, { interactive:false }).addTo(map);
+      const imgLayer = L.imageOverlay(imageUrl, imageBounds, { interactive:false }).addTo(map);
 
-      // Fit the whole image then explicitly center on the image midpoint
-      map.fitBounds(imageBounds);
-      const center = imageBounds.getCenter();
-      map.setView(center, map.getZoom(), { animate:false });
-
+      // Show map, size it, fit & center
       mapEl.style.display = "block";
+      requestAnimationFrame(() => {
+        map.invalidateSize();
+        const targetZoom = map.getBoundsZoom(imageBounds, true);
+        const center = imageBounds.getCenter();
+        map.setView(center, targetZoom, { animate:false });
+      });
+
+      // Also center once the image is fully ready (belt & suspenders)
+      imgLayer.once('load', () => {
+        const targetZoom = map.getBoundsZoom(imageBounds, true);
+        const center = imageBounds.getCenter();
+        map.setView(center, targetZoom, { animate:false });
+      });
+
       statusEl.textContent = "Image map loaded";
 
       // groups
@@ -424,11 +434,9 @@
         openAddModal(e.latlng);
       });
 
-      // Bottom-left Layers control
-      addLayersControl();
-
-      setLockedUI(true);
-      tryLoadOverlay();
+      addLayersControl();     // top-left “Layers”
+      setLockedUI(true);      // start locked
+      tryLoadOverlay(true);   // overlay ON by default
       tryLoadAreas();
       wireData();
     }
@@ -445,13 +453,12 @@
       img.src = src;
     }
 
-    // ===== Layers control (bottom-left) =====
+    // ===== Layers control (TOP-LEFT under banner) =====
     function addLayersControl(){
-      // Clean any duplicates
       document.querySelectorAll('.leaflet-control.layers-toggle').forEach(n => n.remove());
 
       const LayersControl = L.Control.extend({
-        position: 'bottomleft',
+        position: 'topleft',
         onAdd: function(){
           const div = L.DomUtil.create('div', 'leaflet-control layers-toggle');
           const btn = L.DomUtil.create('button', 'btn', div);
@@ -467,9 +474,12 @@
             panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
           });
           L.DomEvent.on(map.getContainer(), 'click', () => { panel.style.display = 'none'; });
+          // Wire after DOM laid out
           setTimeout(() => {
             const chkOverlay = panel.querySelector('#chkOverlay');
             const chkAreas   = panel.querySelector('#chkAreas');
+            // If overlay is already present (default ON), reflect it
+            chkOverlay.checked = !!(zonesOverlay && map.hasLayer(zonesOverlay));
             chkOverlay.addEventListener('change', () => {
               if (!zonesOverlay){ toast("No overlay found."); chkOverlay.checked = false; return; }
               if (chkOverlay.checked){ zonesOverlay.addTo(map); toast("Zones overlay shown"); }
@@ -485,19 +495,24 @@
       });
       const ctl = new LayersControl();
       map.addControl(ctl);
-
-      // Force into bottom-left corner if Leaflet misplaces due to CSS overrides
-      const bl = map._controlCorners && map._controlCorners['bottomleft'];
+      // Force it into the Leaflet top-left corner (in case of external CSS)
+      const tl = map._controlCorners && map._controlCorners['topleft'];
       const el = document.querySelector('.leaflet-control.layers-toggle');
-      if (bl && el && el.parentNode !== bl) bl.appendChild(el);
+      if (tl && el && el.parentNode !== tl) tl.appendChild(el);
     }
 
     // ===== Overlay & Areas =====
-    function tryLoadOverlay(){
+    function tryLoadOverlay(defaultOn=false){
       const test = new Image();
       test.onload = () => {
         const bounds = imageBounds || L.latLngBounds([[0,0],[imageHeight, imageWidth]]);
         zonesOverlay = L.imageOverlay("overlay.png?v="+Date.now(), bounds, { opacity:0.85, interactive:false });
+        if (defaultOn) {
+          zonesOverlay.addTo(map);
+          // If the control is already mounted, tick the checkbox
+          const chk = document.getElementById("chkOverlay");
+          if (chk) chk.checked = true;
+        }
       };
       test.onerror = () => console.log("[zones] overlay.png not found (optional)");
       test.src = "overlay.png?v="+Date.now();
@@ -676,7 +691,6 @@
       setLockedUI(false);
     });
     document.getElementById("lockBtn").addEventListener("click", async () => { try { await signOut(auth); } catch{} setLockedUI(true); });
-    document.getElementById("editMode").addEventListener("change", applyEditMode);
 
     // ===== Changelog & Stats =====
     const REPO_OWNER = "equestrix"; const REPO_NAME  = "Apartment-Map";
