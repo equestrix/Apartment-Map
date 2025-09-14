@@ -96,20 +96,14 @@
     .popup a{ color:#003366; font-weight:600; text-decoration:none; border-bottom:1px solid transparent; }
     .popup a:hover{ border-bottom-color:#003366; }
 
-    /* Zoom — bumped down a bit more */
-    .leaflet-control-zoom{
-      position:absolute !important; left:10px !important; bottom:72px !important;
-      top:auto !important; margin:0 !important;
-    }
-
     .area-label{
       background:rgba(255,255,255,.85);
       padding:2px 6px; border-radius:6px; font:12px/1.2 system-ui; color:#111;
       border:1px solid rgba(0,0,0,.1); white-space:nowrap;
     }
 
-    /* Layers control — top-left under banner, bumped down */
-    .leaflet-top.leaflet-left .leaflet-control.layers-toggle { margin:76px 0 0 10px; }
+    /* Layers control — top-left under banner, bumped down more */
+    .leaflet-top.leaflet-left .leaflet-control.layers-toggle { margin:118px 0 0 10px; }
     .leaflet-control.layers-toggle .btn{
       display:flex; align-items:center; gap:6px;
       background:#fff; color:#111; border-radius:8px; padding:8px 10px;
@@ -142,7 +136,7 @@
     <button id="unlockBtn" title="Enter password to edit">Unlock</button>
     <button id="lockBtn" style="display:none" title="Lock editing">Lock</button>
 
-    <span id="hint">Loading…</span>
+    <span id="hint">Syncing…</span>
 
     <div id="settings" style="margin-left:auto">
       <button id="settingsBtn" title="Open settings">⚙️ Settings</button>
@@ -214,8 +208,8 @@
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ===== Build =====
-    const VERSION = "beta 1.1.6";
-    const VERSION_NOTE = "Center + slight downward nudge; Layers & Zoom bumped down; add/edit reliability.";
+    const VERSION = "beta 1.1.7";
+    const VERSION_NOTE = "Zoom to bottom-left; Layers lowered; reliable Ready state; extra downward pan.";
     document.getElementById("version").textContent = VERSION;
 
     // ===== Firebase =====
@@ -398,26 +392,35 @@
     function init(imageUrl, w, h){
       imageWidth = w; imageHeight = h;
       imageBounds = L.latLngBounds([[0,0],[h,w]]);
-      const targetZoomPadPx = 12; // tiny padding for fit
-      map = L.map("map", { crs:L.CRS.Simple, minZoom:-2, maxZoom:5, zoomControl:true, attributionControl:false });
+
+      // Mount zoom in bottom-left to avoid banner
+      map = L.map("map", {
+        crs: L.CRS.Simple,
+        minZoom: -2,
+        maxZoom: 5,
+        zoomControl: false,         // we'll add it manually
+        attributionControl: false
+      });
+      L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
       const imgLayer = L.imageOverlay(imageUrl, imageBounds, { interactive:false }).addTo(map);
 
-      // Show map, size it, fit & center, then nudge down a bit
+      // Show map, size it, fit & center, then nudge down a bit more
       mapEl.style.display = "block";
       requestAnimationFrame(() => {
         map.invalidateSize();
-        const targetZoom = map.getBoundsZoom(imageBounds.pad(0), true);
+        const targetZoom = map.getBoundsZoom(imageBounds, true);
         const center = imageBounds.getCenter();
         map.setView(center, targetZoom, { animate:false });
-        map.panBy([0, 140], { animate:false }); // nudge view down a bit
+        map.panBy([0, 160], { animate:false }); // extra downward pan
       });
 
       // Also center once the image is fully ready
       imgLayer.once('load', () => {
-        const targetZoom = map.getBoundsZoom(imageBounds.pad(0), true);
+        const targetZoom = map.getBoundsZoom(imageBounds, true);
         const center = imageBounds.getCenter();
         map.setView(center, targetZoom, { animate:false });
-        map.panBy([0, 140], { animate:false });
+        map.panBy([0, 160], { animate:false });
       });
 
       statusEl.textContent = "Image map loaded";
@@ -432,7 +435,7 @@
         markers.forEach(m => { if (m._marker) m._marker.setIcon(iconFor(m)); });
       });
 
-      // Add only when unlocked + Add mode checked (kept same behavior)
+      // Add only when unlocked + Add mode checked (unchanged behavior)
       map.on("click", (e) => {
         if (!(unlocked && addModeEl.checked)) return;
         if (document.querySelector("#addModal.show")) return;
@@ -610,8 +613,8 @@
           if (!serverSnap.empty){
             serverSnap.forEach(d => pushDoc(d));
             statusEl.textContent = "Loaded " + markers.size + " properties (server)";
-            hintEl.textContent = "Ready";
             sawFirstSnapshot = true;
+            hintEl.textContent = "Ready";
             map.fire("zoomend");
           }
         } catch(e){ console.warn("[fs] server prefetch:", e?.message||e); }
@@ -631,7 +634,7 @@
             statusEl.textContent = "Loaded " + markers.size + " properties";
             map.fire("zoomend");
           }
-          if (!snap.metadata.fromCache) hintEl.textContent = "Ready";
+          if (!snap.metadata.fromCache) flipReady(); // mark Ready when live data arrives
         },
         error: (err) => {
           console.error("[firestore] onSnapshot error:", err);
@@ -641,7 +644,9 @@
       });
 
       // Fallback so “Syncing…” doesn’t stick
-      setTimeout(() => { if (!sawFirstSnapshot) hintEl.textContent = "Ready"; }, 4000);
+      let readyFlipped = false;
+      function flipReady(){ if (!readyFlipped){ hintEl.textContent = "Ready"; readyFlipped = true; } }
+      setTimeout(flipReady, 5000);
     }
 
     function pushDoc(d){
@@ -690,7 +695,7 @@
     });
 
     document.getElementById("unlockBtn").addEventListener("click", async () => {
-      const pass = prompt("Password:"); if (pass !== LOCAL_EDIT_PASSWORD){ alert("Wrong password."); return; }
+      const pass = prompt("Password:"); if (pass !== "D8D8D8"){ alert("Wrong password."); return; }
       try { if (!auth.currentUser) await signInAnonymously(auth); } catch {}
       setLockedUI(false);
     });
