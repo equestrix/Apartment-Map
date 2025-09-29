@@ -208,7 +208,8 @@
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ===== Build =====
-    const VERSION = "beta 2.0.3";
+    const VERSION = "beta 1.1.7";
+    const VERSION_NOTE = "Zoom to bottom-left; Layers lowered; reliable Ready state; extra downward pan.";
     document.getElementById("version").textContent = VERSION;
 
     // ===== Firebase =====
@@ -269,6 +270,8 @@
     let editingEntry = null;
 
     // ===== State =====
+    const LOCAL_EDIT_PASSWORD = "D8D8D8";
+    const MAP_CANDIDATES = ["map.jpg","map.jpeg","map.png"];
     let unlocked = false;
     let map, currentIconSize = 32;
     let imageWidth = 0, imageHeight = 0;
@@ -299,6 +302,7 @@
       return L.icon({ iconUrl: files[t] || files.apartment, iconSize:[s,s], iconAnchor:[s/2,s/2], tooltipAnchor:[0,-s/2] });
     }
 
+    // ===== Link helpers =====
     function entryLinks(entry){
       if (entry?.links?.length) return entry.links;
       const arr = [];
@@ -311,35 +315,21 @@
       const links = entryLinks(entry);
       if (t === "apartment"){
         let shabby=null, nice=null;
-        for (let i=0;i<links.length;i++){
-          if (!shabby && /shabby/i.test(links[i].label)) shabby=links[i];
-          if (!nice && /nice/i.test(links[i].label)) nice=links[i];
-        }
+        for (let i=0;i<links.length;i++){ if (!shabby && /shabby/i.test(links[i].label)) shabby=links[i]; if (!nice && /nice/i.test(links[i].label)) nice=links[i]; }
         return (shabby?`<p><a href="${shabby.url}" target="_blank" rel="noopener">Shabby Apartment</a></p>`:"") +
                (nice?  `<p><a href="${nice.url}"   target="_blank" rel="noopener">Nice Apartment</a></p>`  :"");
       }
-      if (t === "office"){
-        const link = links[0];
-        return link ? `<p><a href="${link.url}" target="_blank" rel="noopener">Office</a></p>` : "";
-      }
+      if (t === "office"){ const link = links[0]; return link?`<p><a href="${link.url}" target="_blank" rel="noopener">Office</a></p>`:""; }
       if (t === "motel"){
         const link = links[0];
         const note = '<div style="color:#d60000;font-weight:700;margin-top:6px">Don’t use this link in your listing, you need a door photo!</div>';
-        return (link? `<p><a href="${link.url}" target="_blank" rel="noopener">Album</a></p>` : "") + note;
+        return (link?`<p><a href="${link.url}" target="_blank" rel="noopener">Album</a></p>`:"")+note;
       }
       if (t === "penthouse"){
-        let html = "";
-        for (let j=0;j<links.length;j++){
-          const Lk = links[j];
-          html += `<p><a href="${Lk.url||''}" target="_blank" rel="noopener">${Lk.label||"Album"}</a></p>`;
-        }
+        let html=""; for (let j=0;j<links.length;j++){ const Lk=links[j]; html += `<p><a href="${Lk.url||''}" target="_blank" rel="noopener">${Lk.label||"Album"}</a></p>`; }
         return html;
       }
-      let out = "";
-      for (let k=0;k<links.length;k++){
-        const lk = links[k];
-        out += `<p><a href="${lk.url||''}" target="_blank" rel="noopener">${lk.label||"Link"}</a></p>`;  
-      }
+      let out=""; for (let k=0;k<links.length;k++){ const lk=links[k]; out += `<p><a href="${lk.url||''}" target="_blank" rel="noopener">${lk.label||"Link"}</a></p>`; }
       return out;
     }
 
@@ -351,38 +341,28 @@
           <p><strong>Type:</strong> ${entry.type || "apartment"}</p>
           ${renderLinksHTML(entry)}
           <small>Coords: x=${entry.x.toFixed(1)}, y=${entry.y.toFixed(1)}</small>
+          ${ (unlocked && editModeEl.checked)
+              ? '<div style="margin-top:6px;display:flex;gap:8px">' +
+                  '<button class="btn" data-action="edit" style="padding:4px 8px;background:#eee;border-radius:6px">Edit</button>' +
+                  '<button class="btn" data-action="delete" style="padding:4px 8px;background:#eee;border-radius:6px">Delete</button>' +
+                '</div>'
+              : '' }
         </div>`;
       entry._marker.bindPopup(html, { autoPan:false, keepInView:false });
+      entry._marker.on('mousedown', (e)=>{ L.DomEvent.stopPropagation(e); });
+      entry._marker.on('click', (e)=>{ L.DomEvent.stopPropagation(e); if (entry._marker.openPopup) entry._marker.openPopup(); });
 
       entry._marker.off('popupopen').on('popupopen', (e) => {
         if (!(unlocked && editModeEl.checked)) return;
-        const el = e.popup.getElement();
-        if (!el) return;
-        el.querySelector(".popup h3").insertAdjacentHTML("afterend",
-          `<div style="margin-top:6px;display:flex;gap:8px">
-             <button class="btn" data-action="edit" style="padding:4px 8px;background:#eee;border-radius:6px">Edit</button>
-             <button class="btn" data-action="delete" style="padding:4px 8px;background:#eee;border-radius:6px">Delete</button>
-           </div>`
-        );
+        const el = e.popup.getElement(); if (!el) return;
         const editBtn = el.querySelector('[data-action="edit"]');
         const delBtn  = el.querySelector('[data-action="delete"]');
-        if (editBtn) {
-          editBtn.addEventListener('click', (evt) => {
-            evt.stopPropagation();
-            openEditModal(entry);
-          });
-        }
-        if (delBtn) {
-          delBtn.addEventListener('click', async (evt) => {
-            evt.stopPropagation();
-            if (!confirm("Delete this marker?")) return;
-            try {
-              await deleteDoc(doc(db, "markers", entry.id));
-            } catch(err) {
-              alert("Failed to delete: " + (err?.message || err));
-            }
-          });
-        }
+        if (editBtn) editBtn.addEventListener('click', () => openEditModal(entry));
+        if (delBtn) delBtn.addEventListener('click', async () => {
+          if (!confirm("Delete this marker?")) return;
+          try { await deleteDoc(doc(db, "markers", entry.id)); }
+          catch(err){ alert("Failed to delete: " + (err?.message||err)); }
+        });
       });
     }
 
@@ -418,22 +398,24 @@
         crs: L.CRS.Simple,
         minZoom: -2,
         maxZoom: 5,
-        zoomControl: false,
+        zoomControl: false,         // we'll add it manually
         attributionControl: false
       });
       L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
       const imgLayer = L.imageOverlay(imageUrl, imageBounds, { interactive:false }).addTo(map);
 
+      // Show map, size it, fit & center, then nudge down a bit more
       mapEl.style.display = "block";
       requestAnimationFrame(() => {
         map.invalidateSize();
         const targetZoom = map.getBoundsZoom(imageBounds, true);
         const center = imageBounds.getCenter();
         map.setView(center, targetZoom, { animate:false });
-        map.panBy([0, 160], { animate:false });
+        map.panBy([0, 160], { animate:false }); // extra downward pan
       });
 
+      // Also center once the image is fully ready
       imgLayer.once('load', () => {
         const targetZoom = map.getBoundsZoom(imageBounds, true);
         const center = imageBounds.getCenter();
@@ -443,28 +425,26 @@
 
       statusEl.textContent = "Image map loaded";
 
-      groups.apartment.addTo(map);
-      groups.penthouse.addTo(map);
-      groups.office.addTo(map);
-      groups.motel.addTo(map);
+      // groups
+      groups.apartment.addTo(map); groups.penthouse.addTo(map);
+      groups.office.addTo(map); groups.motel.addTo(map);
 
       map.on("zoomend", () => {
         const z = map.getZoom();
         currentIconSize = Math.max(16, Math.min(48, z * 4));
-        markers.forEach(m => {
-          if (m._marker) m._marker.setIcon(iconFor(m));
-        });
+        markers.forEach(m => { if (m._marker) m._marker.setIcon(iconFor(m)); });
       });
 
+      // Add only when unlocked + Add mode checked (unchanged behavior)
       map.on("click", (e) => {
         if (!(unlocked && addModeEl.checked)) return;
         if (document.querySelector("#addModal.show")) return;
         openAddModal(e.latlng);
       });
 
-      addLayersControl();
-      setLockedUI(true);
-      tryLoadOverlay(true);
+      addLayersControl();     // top-left “Layers”
+      setLockedUI(true);      // start locked
+      tryLoadOverlay(true);   // overlay ON by default
       tryLoadAreas();
       wireData();
     }
@@ -481,13 +461,14 @@
       img.src = src;
     }
 
+    // ===== Layers control (TOP-LEFT under banner) =====
     function addLayersControl(){
       document.querySelectorAll('.leaflet-control.layers-toggle').forEach(n => n.remove());
 
       const LayersControl = L.Control.extend({
         position: 'topleft',
         onAdd: function(){
-          const div = L.DomUtil.create('div', 'leaflet-control.layers-toggle');
+          const div = L.DomUtil.create('div', 'leaflet-control layers-toggle');
           const btn = L.DomUtil.create('button', 'btn', div);
           btn.type = 'button'; btn.title = 'Map layers'; btn.textContent = 'Layers';
           const panel = L.DomUtil.create('div', 'panel', div);
@@ -504,6 +485,7 @@
           setTimeout(() => {
             const chkOverlay = panel.querySelector('#chkOverlay');
             const chkAreas   = panel.querySelector('#chkAreas');
+            // Reflect default-on overlay
             chkOverlay.checked = !!(zonesOverlay && map.hasLayer(zonesOverlay));
             chkOverlay.addEventListener('change', () => {
               if (!zonesOverlay){ toast("No overlay found."); chkOverlay.checked = false; return; }
@@ -525,6 +507,7 @@
       if (tl && el && el.parentNode !== tl) tl.appendChild(el);
     }
 
+    // ===== Overlay & Areas =====
     function tryLoadOverlay(defaultOn=false){
       const test = new Image();
       test.onload = () => {
@@ -557,6 +540,7 @@
       }
     }
 
+    // ===== Data (Firestore) =====
     const markersCol = collection(db, "markers");
 
     function layerFor(type){
@@ -576,6 +560,7 @@
           autoPan: false, keyboard:false, bubblingMouseEvents:false,
           icon: iconFor(m)
         }).bindTooltip(m.name || "Property", {direction:"top", offset:[0,-10]});
+        // stop map pan on interactions
         m._marker.on('mousedown', (e)=>{ L.DomEvent.stopPropagation(e); });
         m._marker.on('click', (e)=>{ L.DomEvent.stopPropagation(e); if (m._marker.openPopup) m._marker.openPopup(); });
 
@@ -610,6 +595,7 @@
     async function wireData(){
       let sawFirstSnapshot = false;
 
+      // Cache first
       try {
         const cached = await getDocsFromCache(markersCol);
         if (!cached.empty){
@@ -620,6 +606,7 @@
         }
       } catch {}
 
+      // Server prefetch if needed
       if (markers.size === 0){
         try {
           const serverSnap = await getDocsFromServer(markersCol);
@@ -633,6 +620,7 @@
         } catch(e){ console.warn("[fs] server prefetch:", e?.message||e); }
       }
 
+      // Live updates
       onSnapshot(markersCol, {
         includeMetadataChanges: true,
         next: (snap) => {
@@ -646,7 +634,7 @@
             statusEl.textContent = "Loaded " + markers.size + " properties";
             map.fire("zoomend");
           }
-          if (!snap.metadata.fromCache) flipReady();
+          if (!snap.metadata.fromCache) flipReady(); // mark Ready when live data arrives
         },
         error: (err) => {
           console.error("[firestore] onSnapshot error:", err);
@@ -655,6 +643,7 @@
         }
       });
 
+      // Fallback so “Syncing…” doesn’t stick
       let readyFlipped = false;
       function flipReady(){ if (!readyFlipped){ hintEl.textContent = "Ready"; readyFlipped = true; } }
       setTimeout(flipReady, 5000);
@@ -673,6 +662,7 @@
       return !before || true;
     }
 
+    // ===== Settings & unlock =====
     settingsBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       const open = settingsMenu.style.display === "block";
@@ -706,12 +696,13 @@
 
     document.getElementById("unlockBtn").addEventListener("click", async () => {
       const pass = prompt("Password:"); if (pass !== "D8D8D8"){ alert("Wrong password."); return; }
-      try { if (!auth.currentUser) await signInAnonymously(auth); } catch{}
+      try { if (!auth.currentUser) await signInAnonymously(auth); } catch {}
       setLockedUI(false);
     });
     document.getElementById("lockBtn").addEventListener("click", async () => { try { await signOut(auth); } catch{} setLockedUI(true); });
     document.getElementById("editMode").addEventListener("change", applyEditMode);
 
+    // ===== Changelog & Stats =====
     const REPO_OWNER = "equestrix"; const REPO_NAME  = "Apartment-Map";
     function escapeHtml(s){ const map={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}; return String(s).replace(/[&<>"]/g,c=>map[c]); }
     function openChangelog(){
@@ -759,6 +750,7 @@
         </div>`;
     }
 
+    // ===== Add / Edit Modals =====
     let pendingLatLng = null;
 
     function renderLinkFields(type, entry){
@@ -775,7 +767,7 @@
         const url = (entry?.links?.[0]?.url) || "";
         const label = (t === "office") ? "Office" : "Album";
         html = `<div class="link-row"><label>${label}</label><input id="f-single" type="url" placeholder="https://imgur.com/a/..." value="${url}"></div>`;
-      } else {
+      } else { // penthouse (1–8)
         const links = Array.isArray(entry?.links) ? entry.links : [];
         const count = Math.max(links.length, 2);
         let rows = "";
@@ -844,6 +836,7 @@
       }
     });
 
+    // Edit modal
     function openEditModal(entry){
       editingEntry = entry;
       const lks = entryLinks(entry);
@@ -872,7 +865,7 @@
         const url = (lks[0]?.url)||"";
         const label = (t==="office")?"Office":"Album";
         html += `<div class="link-row"><label>${label}</label><input id="e-single" type="url" value="${url}"></div>`;
-      } else {
+      } else { // penthouse
         const rows = (lks.length ? lks : [{label:"Album 1",url:""},{label:"Album 2",url:""}])
           .slice(0,8)
           .map((Lk,i)=>`
@@ -924,6 +917,7 @@
       }
     });
 
+    // ===== Boot =====
     tryLoadImage();
   </script>
 </body>
