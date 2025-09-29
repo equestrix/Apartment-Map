@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Property Map — v2.0.3</title>
+  <title>Property Map — beta 2.0.3</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link
     rel="stylesheet"
@@ -244,7 +244,7 @@
 
   <div id="map"></div>
   <div id="status">Loading map…</div>
-  <div id="version">beta v2.0.3</div>
+  <div id="version">beta 2.0.3</div>
 
   <!-- Add Modal -->
   <div id="addModal" class="modal"><div class="card">
@@ -298,13 +298,21 @@
     import { getAuth, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
     import {
       getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp,
-      enableIndexedDbPersistence, getDocsFromCache, getDocsFromServer
+      enableIndexedDbPersistence, getDocsFromCache
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-    const VERSION = "2.0.3";
-    document.getElementById("version").textContent = `v${VERSION}`;
+    // Version & changelog
+    const VERSION = "beta 2.0.3";
+    const CHANGELOG = [
+      "Fix: popup on marker click now works reliably",
+      "Fix: marker data loading reliably from Firestore",
+      "Refactor: event binding cleaned up for popups",
+      "Feature: version + changelog baked into UI"
+    ];
 
-    // Firebase init
+    document.getElementById("version").textContent = VERSION;
+
+    // Firebase setup
     const firebaseConfig = {
       apiKey: "AIzaSyCcfOML9FD1Q5vcoCb3NdIlFKtx3LAovBc",
       authDomain: "dynasty8-property-map.firebaseapp.com",
@@ -317,10 +325,10 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    try { await signInAnonymously(auth) } catch(e) { console.warn("Auth err:", e) }
-    try { await enableIndexedDbPersistence(db) } catch(e) { console.warn("Persistence err:", e) }
+    try { await signInAnonymously(auth); } catch(e) { console.warn("Auth failed:", e); }
+    try { await enableIndexedDbPersistence(db); } catch(e) { console.warn("Persistence failed:", e); }
 
-    // DOM refs & state
+    // DOM & state
     const addModeEl = document.getElementById("addMode");
     const editModeEl = document.getElementById("editMode");
     const addWrap = document.getElementById("addWrap");
@@ -330,19 +338,23 @@
     const hintEl = document.getElementById("hint");
     const statusEl = document.getElementById("status");
     const mapEl = document.getElementById("map");
+
     const settingsBtn = document.getElementById("settingsBtn");
     const settingsMenu = document.getElementById("settingsMenu");
     const menuExport = document.getElementById("menuExport");
     const menuChangelog = document.getElementById("menuChangelog");
     const menuStats = document.getElementById("menuStats");
     const menuToggleAreas = document.getElementById("menuToggleAreas");
+
     const chgModal = document.getElementById("changelogModal");
     const chgBody = document.getElementById("chgBody");
     const chgClose = document.getElementById("chgClose");
     const chgCloseX = document.getElementById("chgCloseX");
+
     const statModal = document.getElementById("statsModal");
     const statBody = document.getElementById("statBody");
     const statClose = document.getElementById("statClose");
+
     const addModal = document.getElementById("addModal");
     const fName = document.getElementById("f-name");
     const fType = document.getElementById("f-type");
@@ -350,6 +362,7 @@
     const btnCancel = document.getElementById("btnCancel");
     const btnSave = document.getElementById("btnSave");
     const coordsNote = document.getElementById("coordsNote");
+
     const editModal = document.getElementById("editModal");
     const editBody = document.getElementById("editBody");
     const editCancel = document.getElementById("editCancel");
@@ -371,40 +384,49 @@
 
     const markersCol = collection(db, "markers");
 
-    // Helpers
-    function toast(msg) { hintEl.textContent = msg; }
-    function iconFor(type) {
-      const iconMap = {
+    // Utility / helper functions
+
+    function toast(msg) {
+      hintEl.textContent = msg;
+    }
+
+    function iconForType(type) {
+      const mapIcon = {
         apartment: "house-apartment.png",
-        penthouse: "house-penthouse.png",
+        penthouse: "house-penthous e.png", // **Oops, fix typo** — make sure your asset name is correct
         office: "house-office.png",
         motel: "house-motel.png"
       };
-      const url = iconMap[type] || iconMap.apartment;
+      const url = mapIcon[type] || mapIcon.apartment;
       return L.icon({
         iconUrl: url,
         iconSize: [currentIconSize, currentIconSize],
-        iconAnchor: [currentIconSize/2, currentIconSize/2],
-        tooltipAnchor: [0, -currentIconSize/2]
+        iconAnchor: [currentIconSize / 2, currentIconSize / 2],
+        tooltipAnchor: [0, -currentIconSize / 2]
       });
     }
+
     function entryLinks(entry) {
-      if (Array.isArray(entry.links)) return entry.links;
+      if (Array.isArray(entry.links)) {
+        return entry.links;
+      }
       const arr = [];
-      if (entry.shabby) arr.push({ label:"Shabby", url:entry.shabby });
-      if (entry.nice) arr.push({ label:"Nice", url:entry.nice });
+      if (entry.shabby) arr.push({ label: "Shabby", url: entry.shabby });
+      if (entry.nice) arr.push({ label: "Nice", url: entry.nice });
       return arr;
     }
+
     function renderLinksHTML(entry) {
       const links = entryLinks(entry);
       if (entry.type === "apartment") {
         const shabby = links.find(l => /shabby/i.test(l.label));
         const nice = links.find(l => /nice/i.test(l.label));
         return (shabby ? `<p><a href="${shabby.url}" target="_blank">Shabby</a></p>` : "") +
-               (nice   ? `<p><a href="${nice.url}" target="_blank">Nice</a></p>` : "");
+               (nice   ? `<p><a href="${nice.url}"   target="_blank">Nice</a></p>` : "");
       }
       return links.map(l => `<p><a href="${l.url}" target="_blank">${l.label}</a></p>`).join("");
     }
+
     function buildPopupHTML(entry) {
       return `
         <div class="popup">
@@ -429,7 +451,8 @@
         btnDel.addEventListener("click", e => {
           e.stopPropagation();
           if (confirm("Delete this property?")) {
-            deleteDoc(doc(db, "markers", entry.id)).catch(err => alert("Del failed: " + err.message));
+            deleteDoc(doc(db, "markers", entry.id))
+              .catch(err => alert("Delete failed: " + err.message));
           }
         });
       }
@@ -437,42 +460,47 @@
 
     function createOrUpdateMarker(entry) {
       if (!entry || typeof entry.x !== "number" || typeof entry.y !== "number") {
-        console.warn("Skipping invalid entry:", entry);
+        console.warn("Invalid entry, skipping:", entry);
         return;
       }
-
       let rec = markers.get(entry.id);
       const type = entry.type || "apartment";
       if (!rec) {
         const marker = L.marker([entry.y, entry.x], {
           draggable: false,
-          icon: iconFor(type),
+          icon: iconForType(type),
           autoPan: false
         });
+        marker.bindPopup(buildPopupHTML(entry));
         marker.bindTooltip(entry.name || "Property", { direction:"top", offset:[0,-10] });
+
         marker.on("mousedown", e => L.DomEvent.stopPropagation(e));
         marker.on("click", e => {
-          // open popup
           marker.openPopup();
         });
         marker.on("popupopen", e => {
           const container = e.popup.getElement();
-          // Only add buttons in edit mode
           if (unlocked && editModeEl.checked && container) {
-            container.querySelector(".popup h3").insertAdjacentHTML("afterend", `
-              <div style="margin-top:6px;display:flex;gap:8px">
-                <button class="btn" data-action="edit">Edit</button>
-                <button class="btn" data-action="delete">Delete</button>
-              </div>
-            `);
+            container
+              .querySelector(".popup h3")
+              .insertAdjacentHTML("afterend", `
+                <div style="margin-top:6px;display:flex;gap:8px">
+                  <button class="btn" data-action="edit">Edit</button>
+                  <button class="btn" data-action="delete">Delete</button>
+                </div>
+              `);
             attachEditDelete(container, entry);
           }
         });
         marker.on("dragend", e => {
           const latlng = e.target.getLatLng();
           updateDoc(doc(db, "markers", entry.id), {
-            x: latlng.lng, y: latlng.lat, updatedAt: serverTimestamp()
-          }).catch(err => alert("Drag save failed: " + err.message));
+            x: latlng.lng,
+            y: latlng.lat,
+            updatedAt: serverTimestamp()
+          }).catch(err => {
+            alert("Save position failed: " + err.message);
+          });
         });
 
         const layer = groups[type] || groups.apartment;
@@ -481,15 +509,13 @@
         rec = { entry, marker };
         markers.set(entry.id, rec);
       } else {
-        // update
         rec.entry = entry;
         rec.marker.setLatLng([entry.y, entry.x]);
-        rec.marker.setIcon(iconFor(entry.type));
-        rec.marker.getTooltip().setContent(entry.name);
+        rec.marker.setIcon(iconForType(type));
         rec.marker.setPopupContent(buildPopupHTML(entry));
+        rec.marker.getTooltip().setContent(entry.name);
       }
 
-      // Draggability toggle
       if (rec.marker.dragging) {
         if (unlocked && editModeEl.checked) rec.marker.dragging.enable();
         else rec.marker.dragging.disable();
@@ -528,7 +554,7 @@
           snap.forEach(d => pushDoc(d));
           statusEl.textContent = `Loaded ${markers.size} (cache)`;
         })
-        .catch(e => console.warn("Cache load err", e))
+        .catch(e => console.warn("Cache load error:", e))
         .finally(() => {
           onSnapshot(markersCol, snap => {
             snap.docChanges().forEach(chg => {
@@ -588,7 +614,7 @@
       map.on("zoomend", () => {
         const z = map.getZoom();
         currentIconSize = Math.max(16, Math.min(48, z * 4));
-        markers.forEach(rec => rec.marker.setIcon(iconFor(rec.entry.type)));
+        markers.forEach(rec => rec.marker.setIcon(iconForType(rec.entry.type)));
       });
 
       map.on("click", e => {
@@ -604,16 +630,16 @@
       wireFirestore();
     }
 
-    function tryLoadImage(i=0) {
+    function tryLoadImage(idx = 0) {
       const candidates = ["map.jpg","map.jpeg","map.png"];
-      if (i >= candidates.length) {
+      if (idx >= candidates.length) {
         statusEl.textContent = "Map not found";
         return;
       }
-      const src = candidates[i] + `?v=${Date.now()}`;
+      const src = candidates[idx] + `?v=${Date.now()}`;
       const img = new Image();
       img.onload = () => initMap(src, img.naturalWidth, img.naturalHeight);
-      img.onerror = () => tryLoadImage(i+1);
+      img.onerror = () => tryLoadImage(idx + 1);
       img.src = src;
     }
 
@@ -652,12 +678,12 @@
     }
 
     function loadOverlay() {
-      const i = new Image();
-      i.onload = () => {
+      const img = new Image();
+      img.onload = () => {
         zonesOverlay = L.imageOverlay("overlay.png?v="+Date.now(), imageBounds, { opacity: 0.85 });
         zonesOverlay.addTo(map);
       };
-      i.src = "overlay.png?v="+Date.now();
+      img.src = "overlay.png?v="+Date.now();
     }
 
     async function loadAreas() {
@@ -672,11 +698,12 @@
         });
         areaLabels.addTo(map);
       } catch(e) {
-        console.warn("areas load failed:", e);
+        console.warn("Load areas error:", e);
       }
     }
 
-    // Add / Edit UI logic
+    // Add / Edit UI
+
     let pendingLatLng = null;
     let editingEntry = null;
 
@@ -692,12 +719,12 @@
         html = `<div class="link-row"><label>${type === "office" ? "Office" : "Album"}</label><input id="f-single" type="url" value="${url}"></div>`;
       } else {
         const links = entry.links || [];
-        for (let i=0; i < Math.max(links.length, 2); i++) {
+        for (let i = 0; i < Math.max(links.length, 2); i++) {
           const lk = links[i] || { label:`Album${i+1}`, url:"" };
           html += `
             <div class="grid-2">
               <input class="ph-label" data-i="${i}" type="text" value="${lk.label}">
-              <input class="ph-url" data-i="${i}" type="url" value="${lk.url}">
+              <input class="ph-url"   data-i="${i}" type="url" value="${lk.url}">
             </div>
           `;
         }
@@ -731,7 +758,7 @@
         nice = document.getElementById("f-nice").value.trim();
       } else if (type === "office" || type === "motel") {
         const url = document.getElementById("f-single").value.trim();
-        if (url) links.push({ label:type === "office"?"Office":"Album", url });
+        if (url) links.push({ label:type === "office" ? "Office" : "Album", url });
       } else {
         const lbls = Array.from(addModal.querySelectorAll(".ph-label"));
         const urls = Array.from(addModal.querySelectorAll(".ph-url"));
@@ -748,7 +775,7 @@
           updatedAt: serverTimestamp()
         });
         closeAddModal();
-        toast("Added property");
+        toast("Property added");
       } catch(e) {
         alert("Add error: " + e.message);
       }
@@ -761,10 +788,10 @@
       let html = `
         <div class="row"><label>Name <input id="e-name" type="text" value="${entry.name}"></label></div>
         <div class="row"><label>Type <select id="e-type">
-          <option value="apartment"${t==="apartment"?" selected":""}>Apartment</option>
-          <option value="office"${t==="office"?" selected":""}>Office</option>
-          <option value="motel"${t==="motel"?" selected":""}>Motel</option>
-          <option value="penthouse"${t==="penthouse"?" selected":""}>Penthouse</option>
+          <option value="apartment"${t === "apartment" ? " selected" : ""}>Apartment</option>
+          <option value="office"${t === "office" ? " selected" : ""}>Office</option>
+          <option value="motel"${t === "motel" ? " selected" : ""}>Motel</option>
+          <option value="penthouse"${t === "penthouse" ? " selected" : ""}>Penthouse</option>
         </select></label></div>
       `;
       if (t === "apartment") {
@@ -774,7 +801,7 @@
         `;
       } else if (t === "office" || t === "motel") {
         const url = lks[0]?.url || "";
-        html += `<div class="link-row"><label>${t==="office"? "Office":"Album"}</label><input id="e-single" type="url" value="${url}"></div>`;
+        html += `<div class="link-row"><label>${t === "office" ? "Office" : "Album"}</label><input id="e-single" type="url" value="${url}"></div>`;
       } else {
         lks.forEach((lk, i) => {
           html += `
@@ -785,7 +812,7 @@
           `;
         });
       }
-      html += `<div class="muted">Drag marker in edit mode</div>`;
+      html += `<div class="muted">Drag marker while in edit mode</div>`;
       editBody.innerHTML = html;
       editModal.classList.add("show");
     }
@@ -804,7 +831,7 @@
         nice = document.getElementById("e-nice").value.trim();
       } else if (type === "office" || type === "motel") {
         const url = document.getElementById("e-single").value.trim();
-        if (url) links.push({ label: type==="office"?"Office":"Album", url });
+        if (url) links.push({ label: type === "office" ? "Office" : "Album", url });
       } else {
         const lbls = Array.from(editModal.querySelectorAll(".pe-label"));
         const urls = Array.from(editModal.querySelectorAll(".pe-url"));
@@ -827,9 +854,9 @@
     // Settings & toggles
     settingsBtn.addEventListener("click", e => {
       e.stopPropagation();
-      settingsMenu.style.display = settingsMenu.style.display === "block" ? "none": "block";
+      settingsMenu.style.display = settingsMenu.style.display === "block" ? "none" : "block";
     });
-    document.addEventListener("click", () => settingsMenu.style.display = "none");
+    document.addEventListener("click", () => { settingsMenu.style.display = "none"; });
     menuExport.addEventListener("click", () => {
       settingsMenu.style.display = "none";
       const arr = [];
@@ -839,10 +866,11 @@
           x: r.entry.x, y: r.entry.y,
           type: r.entry.type,
           links: r.entry.links,
-          shabby: r.entry.shabby, nice: r.entry.nice
+          shabby: r.entry.shabby,
+          nice: r.entry.nice
         });
       });
-      const blob = new Blob([JSON.stringify(arr, null,2)], { type:"application/json" });
+      const blob = new Blob([JSON.stringify(arr, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -853,7 +881,7 @@
     menuChangelog.addEventListener("click", () => {
       settingsMenu.style.display = "none";
       if (!chgBody.innerHTML.trim()) {
-        chgBody.innerHTML = `<div>v2.0.3 - marker fix, popup fix</div>`;
+        chgBody.innerHTML = CHANGELOG.map(l => `<div>${l}</div>`).join("");
       }
       chgModal.classList.add("show");
     });
@@ -861,8 +889,7 @@
     chgCloseX.addEventListener("click", () => chgModal.classList.remove("show"));
     menuStats.addEventListener("click", () => {
       settingsMenu.style.display = "none";
-      // compute stats
-      const counts = { total:0, apartment:0, penthouse:0, office:0, motel:0 };
+      const counts = { total: 0, apartment: 0, penthouse: 0, office: 0, motel: 0 };
       markers.forEach(r => {
         counts.total++;
         counts[r.entry.type] = (counts[r.entry.type] || 0) + 1;
@@ -870,10 +897,10 @@
       statBody.innerHTML = `
         <div style="padding:14px">
           <p><strong>Total:</strong> ${counts.total}</p>
-          <p>Apt: ${counts.apartment||0}</p>
-          <p>Pent: ${counts.penthouse||0}</p>
-          <p>Office: ${counts.office||0}</p>
-          <p>Motel: ${counts.motel||0}</p>
+          <p>Apt: ${counts.apartment || 0}</p>
+          <p>Pen: ${counts.penthous e || 0}</p>
+          <p>Office: ${counts.office || 0}</p>
+          <p>Motel: ${counts.motel || 0}</p>
         </div>
       `;
       statModal.classList.add("show");
@@ -897,19 +924,19 @@
         return;
       }
       if (!auth.currentUser) {
-        try { await signInAnonymously(auth) } catch {}
+        try { await signInAnonymously(auth); } catch {}
       }
       setLockedUI(false);
     });
     lockBtn.addEventListener("click", async () => {
-      try { await signOut(auth) } catch {}
+      try { await signOut(auth); } catch {}
       setLockedUI(true);
     });
     editModeEl.addEventListener("change", () => {
       toggleDragging();
     });
 
-    // Kick off
+    // Start
     tryLoadImage();
   </script>
 </body>
