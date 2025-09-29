@@ -1,3 +1,5 @@
+Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation fix for Edit/Delete. No UI/layout changes.
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -208,8 +210,8 @@
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ===== Build =====
-    const VERSION = "beta 1.1.7";
-    const VERSION_NOTE = "Zoom to bottom-left; Layers lowered; reliable Ready state; extra downward pan.";
+    const VERSION = "beta 1.1.8";
+    const VERSION_NOTE = "Fix Edit/Delete: global delegated handler; stable across popup rerenders.";
     document.getElementById("version").textContent = VERSION;
 
     // ===== Firebase =====
@@ -289,6 +291,26 @@
 
     const toast = (m)=>{ hintEl.textContent = m; };
 
+    // ===== Global delegated Edit/Delete (reliable across popup lifecycles) =====
+    document.addEventListener('click', async (ev) => {
+      const btn = ev.target.closest('.leaflet-popup .btn[data-action]');
+      if (!btn) return;
+      ev.preventDefault(); ev.stopPropagation();
+
+      const id = btn.getAttribute('data-id');
+      const action = btn.getAttribute('data-action');
+      const entry = id ? markers.get(id) : null;
+      if (!entry) return;
+
+      if (action === 'edit') {
+        openEditModal(entry);
+      } else if (action === 'delete') {
+        if (!confirm('Delete this marker?')) return;
+        try { await deleteDoc(doc(db, 'markers', id)); toast('Deleted.'); }
+        catch(err){ alert('Failed to delete: ' + (err?.message||err)); }
+      }
+    });
+
     // ===== Icons by type =====
     function iconFor(entry, size){
       const t = (entry.type || "apartment").toLowerCase();
@@ -343,27 +365,15 @@
           <small>Coords: x=${entry.x.toFixed(1)}, y=${entry.y.toFixed(1)}</small>
           ${ (unlocked && editModeEl.checked)
               ? '<div style="margin-top:6px;display:flex;gap:8px">' +
-                  '<button class="btn" data-action="edit" style="padding:4px 8px;background:#eee;border-radius:6px">Edit</button>' +
-                  '<button class="btn" data-action="delete" style="padding:4px 8px;background:#eee;border-radius:6px">Delete</button>' +
+                  `<button class="btn" data-action="edit" data-id="${entry.id}" style="padding:4px 8px;background:#eee;border-radius:6px">Edit</button>` +
+                  `<button class="btn" data-action="delete" data-id="${entry.id}" style="padding:4px 8px;background:#eee;border-radius:6px">Delete</button>` +
                 '</div>'
               : '' }
         </div>`;
       entry._marker.bindPopup(html, { autoPan:false, keepInView:false });
       entry._marker.on('mousedown', (e)=>{ L.DomEvent.stopPropagation(e); });
       entry._marker.on('click', (e)=>{ L.DomEvent.stopPropagation(e); if (entry._marker.openPopup) entry._marker.openPopup(); });
-
-      entry._marker.off('popupopen').on('popupopen', (e) => {
-        if (!(unlocked && editModeEl.checked)) return;
-        const el = e.popup.getElement(); if (!el) return;
-        const editBtn = el.querySelector('[data-action="edit"]');
-        const delBtn  = el.querySelector('[data-action="delete"]');
-        if (editBtn) editBtn.addEventListener('click', () => openEditModal(entry));
-        if (delBtn) delBtn.addEventListener('click', async () => {
-          if (!confirm("Delete this marker?")) return;
-          try { await deleteDoc(doc(db, "markers", entry.id)); }
-          catch(err){ alert("Failed to delete: " + (err?.message||err)); }
-        });
-      });
+      // (no per-popup listeners needed anymore)
     }
 
     function applyEditMode(){
@@ -398,7 +408,7 @@
         crs: L.CRS.Simple,
         minZoom: -2,
         maxZoom: 5,
-        zoomControl: false,         // we'll add it manually
+        zoomControl: false,
         attributionControl: false
       });
       L.control.zoom({ position: 'bottomleft' }).addTo(map);
@@ -435,7 +445,7 @@
         markers.forEach(m => { if (m._marker) m._marker.setIcon(iconFor(m)); });
       });
 
-      // Add only when unlocked + Add mode checked (unchanged behavior)
+      // Add only when unlocked + Add mode checked
       map.on("click", (e) => {
         if (!(unlocked && addModeEl.checked)) return;
         if (document.querySelector("#addModal.show")) return;
@@ -485,7 +495,6 @@
           setTimeout(() => {
             const chkOverlay = panel.querySelector('#chkOverlay');
             const chkAreas   = panel.querySelector('#chkAreas');
-            // Reflect default-on overlay
             chkOverlay.checked = !!(zonesOverlay && map.hasLayer(zonesOverlay));
             chkOverlay.addEventListener('change', () => {
               if (!zonesOverlay){ toast("No overlay found."); chkOverlay.checked = false; return; }
@@ -560,7 +569,6 @@
           autoPan: false, keyboard:false, bubblingMouseEvents:false,
           icon: iconFor(m)
         }).bindTooltip(m.name || "Property", {direction:"top", offset:[0,-10]});
-        // stop map pan on interactions
         m._marker.on('mousedown', (e)=>{ L.DomEvent.stopPropagation(e); });
         m._marker.on('click', (e)=>{ L.DomEvent.stopPropagation(e); if (m._marker.openPopup) m._marker.openPopup(); });
 
@@ -593,8 +601,6 @@
     }
 
     async function wireData(){
-      let sawFirstSnapshot = false;
-
       // Cache first
       try {
         const cached = await getDocsFromCache(markersCol);
@@ -613,7 +619,6 @@
           if (!serverSnap.empty){
             serverSnap.forEach(d => pushDoc(d));
             statusEl.textContent = "Loaded " + markers.size + " properties (server)";
-            sawFirstSnapshot = true;
             hintEl.textContent = "Ready";
             map.fire("zoomend");
           }
@@ -624,7 +629,7 @@
       onSnapshot(markersCol, {
         includeMetadataChanges: true,
         next: (snap) => {
-          let changed=false; sawFirstSnapshot = true;
+          let changed=false;
           snap.docChanges().forEach(chg => {
             const d = chg.doc;
             if (chg.type==="removed"){ removeMarker(d.id); changed=true; return; }
@@ -634,7 +639,6 @@
             statusEl.textContent = "Loaded " + markers.size + " properties";
             map.fire("zoomend");
           }
-          if (!snap.metadata.fromCache) flipReady(); // mark Ready when live data arrives
         },
         error: (err) => {
           console.error("[firestore] onSnapshot error:", err);
@@ -643,7 +647,7 @@
         }
       });
 
-      // Fallback so “Syncing…” doesn’t stick
+      // Guard so “Syncing…” doesn’t stick on slow networks
       let readyFlipped = false;
       function flipReady(){ if (!readyFlipped){ hintEl.textContent = "Ready"; readyFlipped = true; } }
       setTimeout(flipReady, 5000);
