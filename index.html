@@ -2,84 +2,967 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Property Map</title>
+  <title>Property Map — v2.0.2</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin
+  />
   <style>
-    html,body{ height:100%; margin:0; background:#0fa8d2; }
-    .leaflet-container{ background:#0fa8d2; }
-    #map{ position:absolute; inset:56px 0 0 0; display:none; }
-    #toolbar{ position:fixed; inset:0 0 auto 0; height:56px; display:flex; gap:12px; align-items:center; padding:8px 12px; background:#93c47d; color:#111; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; z-index:1000; box-shadow:0 2px 8px rgba(0,0,0,.2);} 
-    #brand{ display:flex; align-items:center; gap:8px; }
-    #brand img{ height:36px; width:auto; display:block; }
-    #toolbar button{ border:none; padding:8px 12px; border-radius:8px; cursor:pointer; background:#fff; color:#111; font-weight:700; }
-    #toolbar button:hover{ filter:brightness(.97); color:#111; }
-    #status{ position:fixed; bottom:8px; left:10px; font:13px/1.3 system-ui; color:#111; background:rgba(255,255,255,.9); padding:4px 8px; border-radius:6px; z-index:1200; box-shadow:0 2px 6px rgba(0,0,0,.15);} 
-    #version{ position:fixed; bottom:8px; right:10px; font:12px/1 monospace; color:rgba(255,255,255,.92); background:rgba(0,0,0,.6); padding:2px 6px; border-radius:4px; z-index:1200; }
-    .leaflet-popup-content-wrapper{ background:#d9ead3; border:2px solid #93c47d; border-radius:10px; }
-    .leaflet-popup-tip{ background:#d9ead3; }
+    :root {
+      --main: #93c47d;
+      --secondary: #b6d7a8;
+      --accent: #d9ead3;
+      --sea: #0fa8d2;
+      --ink: #111;
+    }
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      background: var(--sea);
+    }
+    .leaflet-container {
+      background: var(--sea);
+    }
+    #map {
+      position: absolute;
+      inset: 56px 0 0 0;
+      display: none;
+    }
+    #toolbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      background: var(--main);
+      color: var(--ink);
+      z-index: 1000;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    #toolbar button {
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      background: #fff;
+      color: #111;
+      font-weight: 700;
+    }
+    #toolbar button:hover {
+      filter: brightness(0.97);
+    }
+    #toolbar label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #toolbar input[type="checkbox"] {
+      transform: translateY(1px);
+    }
+    #status {
+      position: fixed;
+      bottom: 8px;
+      left: 10px;
+      font: 13px/1.3 system-ui;
+      color: #111;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 4px 8px;
+      border-radius: 6px;
+      z-index: 1200;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    }
+    #version {
+      position: fixed;
+      bottom: 8px;
+      right: 10px;
+      font: 12px/1 monospace;
+      color: rgba(255, 255, 255, 0.92);
+      background: rgba(0, 0, 0, 0.6);
+      padding: 2px 6px;
+      border-radius: 4px;
+      z-index: 1200;
+    }
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 1500;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease;
+    }
+    .modal.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .card {
+      width: min(560px, calc(100vw - 24px));
+      max-height: 85vh;
+      overflow: auto;
+      background: var(--secondary);
+      color: #111;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      transform: translateY(6px);
+      transition: transform 0.18s ease;
+    }
+    .modal.show .card {
+      transform: translateY(0);
+    }
+    .card header {
+      padding: 12px 14px;
+      background: var(--main);
+      border-radius: 12px 12px 0 0;
+      font-weight: 700;
+    }
+    .card main {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+      background: var(--accent);
+    }
+    .card footer {
+      padding: 12px 14px;
+      background: var(--secondary);
+      border-radius: 0 0 12px 12px;
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .btn {
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .btn.primary {
+      background: #111;
+      color: #fff;
+    }
+    .btn.ghost {
+      background: #eee;
+      color: #111;
+    }
+    .row {
+      display: grid;
+      gap: 6px;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    input[type="text"],
+    input[type="url"],
+    select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font: 14px system-ui;
+      background: #fff;
+      color: #111;
+    }
+    .muted {
+      color: #333;
+      font-size: 12px;
+    }
+    .link-row {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 8px;
+      align-items: center;
+    }
+    .leaflet-popup-content-wrapper {
+      background: var(--accent);
+      border: 2px solid var(--main);
+      border-radius: 10px;
+    }
+    .leaflet-popup-tip {
+      background: var(--accent);
+    }
+    .popup h3 {
+      margin: 0 0 6px 0;
+      font-size: 16px;
+      color: #111;
+      background: var(--main);
+      padding: 4px 6px;
+      border-radius: 6px;
+      display: inline-block;
+    }
+    .popup p {
+      margin: 0 0 6px;
+    }
+    .popup small {
+      color: #333;
+      display: block;
+      margin-top: 6px;
+    }
+    .popup a {
+      color: #003366;
+      font-weight: 600;
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+    }
+    .popup a:hover {
+      border-bottom-color: #003366;
+    }
+    .area-label {
+      background: rgba(255, 255, 255, 0.85);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font: 12px/1.2 system-ui;
+      color: #111;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      white-space: nowrap;
+    }
+    /* Layers control tweak */
+    .leaflet-top.leaflet-left .leaflet-control.layers-toggle {
+      margin: 118px 0 0 10px;
+    }
   </style>
 </head>
+
 <body>
   <div id="toolbar">
-    <div id="brand">
-      <img src="Dynasty8-GTAV-Logo.png" alt="Dynasty 8">
-      <strong>Property Map</strong>
-    </div>
-    <button id="unlockBtn">Unlock</button>
-    <button id="lockBtn" style="display:none">Lock</button>
+    <div id="brand"><strong>Property Map</strong></div>
+    <label id="addWrap" style="display:none" title="Enable click-to-add"><input type="checkbox" id="addMode"> Add</label>
+    <label id="editWrap" style="display:none" title="Enable edit mode"><input type="checkbox" id="editMode"> Edit</label>
+    <button id="unlockBtn" title="Unlock editing">Unlock</button>
+    <button id="lockBtn" style="display:none" title="Lock editing">Lock</button>
     <span id="hint">Syncing…</span>
+    <div id="settings" style="margin-left:auto">
+      <button id="settingsBtn">⚙️</button>
+      <div id="settingsMenu" style="display:none">
+        <button id="menuExport">Export markers</button>
+        <button id="menuChangelog">Changelog</button>
+        <button id="menuStats">Statistics</button>
+        <button id="menuToggleAreas">Toggle areas</button>
+      </div>
+    </div>
   </div>
 
   <div id="map"></div>
   <div id="status">Loading map…</div>
-  <div id="version"></div>
+  <div id="version">v2.0.2</div>
+
+  <!-- Add Modal -->
+  <div id="addModal" class="modal"><div class="card">
+      <header>Add Property</header>
+      <main>
+        <div class="row"><label>Name <input id="f-name" type="text"></label></div>
+        <div class="grid-2">
+          <label>Type <select id="f-type">
+            <option value="apartment">Apartment</option>
+            <option value="office">Office</option>
+            <option value="motel">Motel</option>
+            <option value="penthouse">Penthouse</option>
+          </select></label>
+          <div class="row"><span class="muted">Controls link fields</span></div>
+        </div>
+        <div id="linksArea"></div>
+        <div class="muted" id="coordsNote"></div>
+      </main>
+      <footer>
+        <button id="btnCancel" class="btn ghost">Cancel</button>
+        <button id="btnSave" class="btn primary">Save</button>
+      </footer>
+    </div></div>
+
+  <!-- Edit Modal -->
+  <div id="editModal" class="modal"><div class="card">
+      <header>Edit Property</header>
+      <main id="editBody"></main>
+      <footer>
+        <button id="editCancel" class="btn ghost">Cancel</button>
+        <button id="editSave" class="btn primary">Save</button>
+      </footer>
+    </div></div>
+
+  <!-- Changelog / Stats Modals -->
+  <div id="changelogModal" class="modal"><div class="card">
+    <header>Changelog <button id="chgCloseX" class="btn ghost" style="position:absolute;right:10px;top:8px">×</button></header>
+    <main id="chgBody">Loading commits…</main>
+    <footer><button id="chgClose" class="btn primary">Close</button></footer>
+  </div></div>
+
+  <div id="statsModal" class="modal"><div class="card">
+    <header>Statistics</header>
+    <main id="statBody"></main>
+    <footer><button id="statClose" class="btn primary">Close</button></footer>
+  </div></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
     import { getAuth, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-    import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+    import {
+      getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp,
+      enableIndexedDbPersistence, getDocsFromCache, getDocsFromServer
+    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-    // ===== Build =====
-    const VERSION = "beta 2.0.1";
-    const VERSION_NOTE = "Map init fix; GTA static map restored; popup click guards; areas removed; overlay default ON; UI polish.";
-    document.getElementById("version").textContent = VERSION;
+    // ————— Version & Changelog —————
+    const VERSION = "2.0.2";
+    const CHANGELOG = [
+      "Fix: edit/delete button responsiveness in popups",
+      "Refactor: consolidated event delegation",
+      "Enhancement: version / changelog support added"
+    ];
 
-    // ===== Firebase =====
-    const firebaseConfig = { apiKey:"AIzaSyCcfOML9FD1Q5vcoCb3NdIlFKtx3LAovBc", authDomain:"dynasty8-property-map.firebaseapp.com", projectId:"dynasty8-property-map", storageBucket:"dynasty8-property-map.firebasestorage.app", messagingSenderId:"849316207524", appId:"1:849316207524:web:9c921ad842fc188d027f31" };
+    document.getElementById("version").textContent = `v${VERSION}`;
+
+    // ————— Firebase Setup —————
+    const firebaseConfig = {
+      apiKey: "AIzaSyCcfOML9FD1Q5vcoCb3NdIlFKtx3LAovBc",
+      authDomain: "dynasty8-property-map.firebaseapp.com",
+      projectId: "dynasty8-property-map",
+      storageBucket: "dynasty8-property-map.firebasestorage.app",
+      messagingSenderId: "849316207524",
+      appId: "1:849316207524:web:9c921ad842fc188d027f31",
+      measurementId: "G-VXG629H337"
+    };
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const db   = getFirestore(app);
-    try { await signInAnonymously(auth); } catch(e){}
-    try { await enableIndexedDbPersistence(db); } catch(e){}
+    const db = getFirestore(app);
+    try { await signInAnonymously(auth) } catch(e) { console.warn("Auth error", e) }
+    try { await enableIndexedDbPersistence(db) } catch(e) { console.warn("Persistence error", e) }
 
+    // ————— DOM & State —————
+    const addModeEl = document.getElementById("addMode");
+    const editModeEl = document.getElementById("editMode");
+    const addWrap = document.getElementById("addWrap");
+    const editWrap = document.getElementById("editWrap");
+    const unlockBtn = document.getElementById("unlockBtn");
+    const lockBtn = document.getElementById("lockBtn");
+    const hintEl = document.getElementById("hint");
+    const statusEl = document.getElementById("status");
     const mapEl = document.getElementById("map");
-    let map, imageWidth=0, imageHeight=0, imageBounds=null;
 
-    const MAP_CANDIDATES=["map.jpg","map.jpeg","map.png"];
+    const settingsBtn = document.getElementById("settingsBtn");
+    const settingsMenu = document.getElementById("settingsMenu");
+    const menuExport = document.getElementById("menuExport");
+    const menuChangelog = document.getElementById("menuChangelog");
+    const menuStats = document.getElementById("menuStats");
+    const menuToggleAreas = document.getElementById("menuToggleAreas");
 
-    function init(imageUrl,w,h){
-      imageWidth=w; imageHeight=h;
-      imageBounds=L.latLngBounds([[0,0],[h,w]]);
-      map=L.map("map",{ crs:L.CRS.Simple, minZoom:-2, maxZoom:5, zoomControl:false, attributionControl:false });
-      L.control.zoom({position:"bottomleft"}).addTo(map);
-      const imgLayer=L.imageOverlay(imageUrl,imageBounds).addTo(map);
-      mapEl.style.display="block";
-      requestAnimationFrame(()=>{ map.invalidateSize(); const targetZoom=map.getBoundsZoom(imageBounds,true); const center=imageBounds.getCenter(); map.setView(center,targetZoom,{animate:false}); map.panBy([0,160],{animate:false}); });
-      imgLayer.once('load',()=>{ const targetZoom=map.getBoundsZoom(imageBounds,true); const center=imageBounds.getCenter(); map.setView(center,targetZoom,{animate:false}); map.panBy([0,160],{animate:false}); });
-      document.getElementById("status").textContent="Image map loaded";
+    const chgModal = document.getElementById("changelogModal");
+    const chgBody = document.getElementById("chgBody");
+    const chgClose = document.getElementById("chgClose");
+    const chgCloseX = document.getElementById("chgCloseX");
+
+    const statModal = document.getElementById("statsModal");
+    const statBody = document.getElementById("statBody");
+    const statClose = document.getElementById("statClose");
+
+    const addModal = document.getElementById("addModal");
+    const fName = document.getElementById("f-name");
+    const fType = document.getElementById("f-type");
+    const linksArea = document.getElementById("linksArea");
+    const btnCancel = document.getElementById("btnCancel");
+    const btnSave = document.getElementById("btnSave");
+    const coordsNote = document.getElementById("coordsNote");
+
+    const editModal = document.getElementById("editModal");
+    const editBody = document.getElementById("editBody");
+    const editCancel = document.getElementById("editCancel");
+    const editSave = document.getElementById("editSave");
+
+    let map, imageWidth = 0, imageHeight = 0, imageBounds = null;
+    let unlocked = false;
+    let currentIconSize = 32;
+    let latestUpdatedAt = 0;
+
+    const groups = {
+      apartment: L.layerGroup(),
+      penthouse: L.layerGroup(),
+      office: L.layerGroup(),
+      motel: L.layerGroup()
+    };
+    const markers = new Map();
+    let zonesOverlay = null;
+    const areaLabels = L.layerGroup();
+
+    const markersCol = collection(db, "markers");
+
+    // ————— Icon / Popup Helpers —————
+    function iconFor(entry) {
+      const t = (entry.type || "apartment").toLowerCase();
+      const mapIcon = {
+        apartment: "house-apartment.png",
+        penthouse: "house-penthouse.png",
+        office: "house-office.png",
+        motel: "house-motel.png"
+      };
+      const url = mapIcon[t] || mapIcon.apartment;
+      return L.icon({
+        iconUrl: url,
+        iconSize: [currentIconSize, currentIconSize],
+        iconAnchor: [currentIconSize / 2, currentIconSize / 2],
+        tooltipAnchor: [0, -currentIconSize / 2]
+      });
     }
 
-    function tryLoadImage(i=0){
-      if(i>=MAP_CANDIDATES.length){ document.getElementById("status").textContent="Could not find map image"; return; }
-      const src=MAP_CANDIDATES[i]+"?v="+Date.now();
-      const img=new Image();
-      img.onload=()=>init(src,img.naturalWidth,img.naturalHeight);
-      img.onerror=()=>tryLoadImage(i+1);
-      img.src=src;
+    function entryLinks(entry) {
+      if (Array.isArray(entry.links)) return entry.links;
+      const arr = [];
+      if (entry.shabby) arr.push({ label: "Shabby", url: entry.shabby });
+      if (entry.nice) arr.push({ label: "Nice", url: entry.nice });
+      return arr;
     }
 
+    function renderLinksHTML(entry) {
+      const links = entryLinks(entry);
+      if (entry.type === "apartment") {
+        const shabby = links.find(l => /shabby/i.test(l.label));
+        const nice = links.find(l => /nice/i.test(l.label));
+        return (shabby ? `<p><a href="${shabby.url}" target="_blank">Shabby</a></p>` : "") +
+               (nice ? `<p><a href="${nice.url}" target="_blank">Nice</a></p>` : "");
+      }
+      // for office, motel, penthouse, general fallback
+      return links.map(l => `<p><a href="${l.url}" target="_blank">${l.label}</a></p>`).join("");
+    }
+
+    function buildPopupHTML(entry) {
+      const base = `
+        <div class="popup">
+          <h3>${entry.name || "Property"}</h3>
+          <p><strong>Type:</strong> ${entry.type}</p>
+          ${renderLinksHTML(entry)}
+          <small>Coords: x=${entry.x.toFixed(1)}, y=${entry.y.toFixed(1)}</small>
+        </div>
+      `;
+      return base;
+    }
+
+    function attachEditDeleteListeners(popupEl, entry) {
+      // Called when popup opens: attach click handlers
+      const editBtn = popupEl.querySelector("[data-action=edit]");
+      const delBtn = popupEl.querySelector("[data-action=delete]");
+      if (editBtn) {
+        editBtn.addEventListener("click", e => {
+          e.stopPropagation();
+          openEditModal(entry);
+        });
+      }
+      if (delBtn) {
+        delBtn.addEventListener("click", e => {
+          e.stopPropagation();
+          if (confirm("Delete this marker?")) {
+            deleteDoc(doc(db, "markers", entry.id)).catch(err => {
+              alert("Delete failed: " + err.message);
+            });
+          }
+        });
+      }
+    }
+
+    function createOrUpdateMarker(entry) {
+      let m = markers.get(entry.id);
+      const t = entry.type.toLowerCase();
+
+      if (!m) {
+        const marker = L.marker([entry.y, entry.x], {
+          draggable: false,
+          icon: iconFor(entry),
+          autoPan: false
+        });
+        marker.bindTooltip(entry.name || "Property", { direction: "top", offset: [0, -10] });
+        marker.on("mousedown", e => L.DomEvent.stopPropagation(e));
+        const layer = groups[t] || groups.apartment;
+        layer.addLayer(marker);
+
+        m = { entry, marker };
+        markers.set(entry.id, m);
+
+        marker.on("popupopen", e => {
+          // Add edit/delete buttons dynamically
+          if (unlocked && editModeEl.checked) {
+            const container = e.popup.getElement();
+            if (!container) return;
+            container
+              .querySelector(".popup h3")
+              .insertAdjacentHTML("afterend", `
+                <div style="margin-top:6px;display:flex;gap:8px">
+                  <button class="btn" data-action="edit" style="padding:4px 8px">Edit</button>
+                  <button class="btn" data-action="delete" style="padding:4px 8px">Delete</button>
+                </div>
+              `);
+            attachEditDeleteListeners(container, entry);
+          }
+        });
+
+        marker.on("dragend", e => {
+          const p = e.target.getLatLng();
+          updateDoc(doc(db, "markers", entry.id), {
+            x: p.lng, y: p.lat, updatedAt: serverTimestamp()
+          }).catch(err => alert("Save position failed: " + err.message));
+        });
+
+      } else {
+        // update existing
+        m.entry = entry;
+        m.marker.setLatLng([entry.y, entry.x]);
+        m.marker.setIcon(iconFor(entry));
+        m.marker.getTooltip().setContent(entry.name || "Property");
+      }
+
+      // if draggable state should change
+      if (m.marker.dragging) {
+        if (unlocked && editModeEl.checked) m.marker.dragging.enable();
+        else m.marker.dragging.disable();
+      }
+
+      // update popup content
+      m.marker.setPopupContent(buildPopupHTML(entry));
+    }
+
+    function removeMarker(id) {
+      const m = markers.get(id);
+      if (m) {
+        const t = m.entry.type.toLowerCase();
+        (groups[t] || groups.apartment).removeLayer(m.marker);
+        markers.delete(id);
+      }
+    }
+
+    function wireFirestore() {
+      // load from cache then server, then live snapshot
+      getDocsFromCache(markersCol)
+        .then(snap => snap.forEach(d => pushDoc(d)))
+        .then(() => statusEl.textContent = `Loaded ${markers.size} (cache)`)
+        .catch(() => {})
+        .finally(() => {
+          // then live
+          onSnapshot(markersCol, snap => {
+            let changed = false;
+            snap.docChanges().forEach(chg => {
+              const d = chg.doc;
+              if (chg.type === "removed") removeMarker(d.id);
+              else {
+                changed = true;
+                pushDoc(d);
+              }
+            });
+            if (changed) {
+              statusEl.textContent = `Loaded ${markers.size}`;
+            }
+            hintEl.textContent = "Ready";
+          }, err => {
+            console.error("Snapshot err", err);
+            statusEl.textContent = "Firestore error";
+          });
+        });
+    }
+
+    function pushDoc(d) {
+      if (!d.exists()) return;
+      const v = d.data();
+      const ms = v.updatedAt?.toMillis?.() || 0;
+      const entry = {
+        id: d.id,
+        name: v.name,
+        x: v.x,
+        y: v.y,
+        type: v.type,
+        links: v.links || [],
+        shabby: v.shabby || "",
+        nice: v.nice || "",
+        updatedAt: ms
+      };
+      createOrUpdateMarker(entry);
+    }
+
+    function setLockedUI(lock) {
+      unlocked = !lock;
+      unlockBtn.style.display = lock ? "" : "none";
+      lockBtn.style.display = lock ? "none" : "";
+      addWrap.style.display = lock ? "none" : "";
+      editWrap.style.display = lock ? "none" : "";
+      if (lock) editModeEl.checked = false;
+      updateMarkerDraggability();
+      toast(lock ? "Locked" : "Unlocked");
+    }
+
+    function updateMarkerDraggability() {
+      markers.forEach(m => {
+        if (m.marker.dragging) {
+          if (unlocked && editModeEl.checked) m.marker.dragging.enable();
+          else m.marker.dragging.disable();
+        }
+      });
+    }
+
+    function toast(msg) {
+      hintEl.textContent = msg;
+    }
+
+    function initMap(imageUrl, w, h) {
+      imageWidth = w;
+      imageHeight = h;
+      imageBounds = L.latLngBounds([[0, 0], [h, w]]);
+      map = L.map("map", {
+        crs: L.CRS.Simple,
+        minZoom: -2,
+        maxZoom: 5,
+        zoomControl: false,
+        attributionControl: false
+      });
+      L.control.zoom({ position: "bottomleft" }).addTo(map);
+      L.imageOverlay(imageUrl, imageBounds).addTo(map);
+      mapEl.style.display = "block";
+      requestAnimationFrame(() => {
+        map.invalidateSize();
+        const zoom = map.getBoundsZoom(imageBounds, true);
+        map.setView(imageBounds.getCenter(), zoom, { animate: false });
+        map.panBy([0, 160], { animate: false });
+      });
+
+      for (const grp of Object.values(groups)) {
+        grp.addTo(map);
+      }
+      map.on("zoomend", () => {
+        const z = map.getZoom();
+        currentIconSize = Math.max(16, Math.min(48, z * 4));
+        markers.forEach(m => m.marker.setIcon(iconFor(m.entry)));
+      });
+      map.on("click", e => {
+        if (unlocked && addModeEl.checked && !document.querySelector(".modal.show")) {
+          openAddModal(e.latlng);
+        }
+      });
+      addLayerControl();
+      setLockedUI(true);
+      loadOverlay();
+      loadAreas();
+      wireFirestore();
+    }
+
+    function tryLoadImage(idx = 0) {
+      const candidates = ["map.jpg", "map.jpeg", "map.png"];
+      if (idx >= candidates.length) {
+        statusEl.textContent = "Map image not found";
+        return;
+      }
+      const src = candidates[idx] + `?v=${Date.now()}`;
+      const img = new Image();
+      img.onload = () => initMap(src, img.naturalWidth, img.naturalHeight);
+      img.onerror = () => tryLoadImage(idx + 1);
+      img.src = src;
+    }
+
+    function addLayerControl() {
+      const LayersControl = L.Control.extend({
+        onAdd: () => {
+          const div = L.DomUtil.create("div", "leaflet-control layers-toggle");
+          const btn = L.DomUtil.create("button", "", div);
+          btn.textContent = "Layers";
+          const panel = L.DomUtil.create("div", "panel", div);
+          panel.innerHTML = `
+            <label><input type="checkbox" id="chkOverlay"> Zoning</label>
+            <label><input type="checkbox" id="chkAreas"> Areas</label>
+          `;
+          L.DomEvent.disableClickPropagation(div);
+          btn.addEventListener("click", () => {
+            panel.style.display = panel.style.display === "block" ? "none" : "block";
+          });
+          map.getContainer().addEventListener("click", () => panel.style.display = "none");
+          setTimeout(() => {
+            const chkO = panel.querySelector("#chkOverlay");
+            const chkA = panel.querySelector("#chkAreas");
+            chkO.addEventListener("change", () => {
+              if (zonesOverlay) {
+                chkO.checked ? zonesOverlay.addTo(map) : map.removeLayer(zonesOverlay);
+              }
+            });
+            chkA.addEventListener("change", () => {
+              chkA.checked ? areaLabels.addTo(map) : map.removeLayer(areaLabels);
+            });
+          }, 0);
+          return div;
+        }
+      });
+      map.addControl(new LayersControl({ position: "topleft" }));
+    }
+
+    function loadOverlay() {
+      const img = new Image();
+      img.onload = () => {
+        zonesOverlay = L.imageOverlay("overlay.png?v=" + Date.now(), imageBounds, { opacity: 0.85 });
+        zonesOverlay.addTo(map);
+      };
+      img.src = "overlay.png?v=" + Date.now();
+    }
+
+    async function loadAreas() {
+      try {
+        const res = await fetch("areas.json?v=" + Date.now(), { cache: "no-store" });
+        const arr = await res.json();
+        areaLabels.clearLayers();
+        arr.forEach(a => {
+          if (typeof a.x === "number" && typeof a.y === "number" && a.name) {
+            const icon = L.divIcon({ className: "area-label", html: a.name });
+            L.marker([a.y, a.x], { icon, interactive: false }).addTo(areaLabels);
+          }
+        });
+      } catch {
+        console.warn("areas.json missing or invalid");
+      }
+    }
+
+    // ————— Add / Edit UI —————
+    let pendingLatLng = null;
+    let editingEntry = null;
+
+    function renderLinkFields(type, entry = {}) {
+      let html = "";
+      if (type === "apartment") {
+        html = `
+          <div class="link-row"><label>Shabby</label><input id="f-shabby" type="url" placeholder="URL" value="${entry.shabby || ""}"></div>
+          <div class="link-row"><label>Nice</label><input id="f-nice" type="url" placeholder="URL" value="${entry.nice || ""}"></div>
+        `;
+      } else if (type === "office" || type === "motel") {
+        const url = (entry.links?.[0]?.url) || "";
+        html = `<div class="link-row"><label>${type === "office" ? "Office" : "Album"}</label><input id="f-single" type="url" value="${url}"></div>`;
+      } else {
+        const links = entry.links || [];
+        const cnt = Math.max(links.length, 2);
+        for (let i = 0; i < cnt && i < 8; i++) {
+          const lk = links[i] || { label: `Album ${i+1}`, url: "" };
+          html += `
+            <div class="grid-2">
+              <input class="ph-label" data-i="${i}" type="text" placeholder="Album ${i+1}" value="${lk.label}">
+              <input class="ph-url"   data-i="${i}" type="url"  placeholder="URL" value="${lk.url}">
+            </div>
+          `;
+        }
+        html += `<div class="muted">Edit later for more.</div>`;
+      }
+      linksArea.innerHTML = html;
+    }
+
+    function openAddModal(latlng) {
+      pendingLatLng = latlng;
+      fName.value = "";
+      fType.value = "apartment";
+      renderLinkFields("apartment");
+      coordsNote.textContent = `Will place at x=${latlng.lng.toFixed(1)}, y=${latlng.lat.toFixed(1)}`;
+      addModal.classList.add("show");
+    }
+    function closeAddModal() {
+      addModal.classList.remove("show");
+      pendingLatLng = null;
+    }
+    btnCancel.addEventListener("click", closeAddModal);
+    fType.addEventListener("change", () => renderLinkFields(fType.value));
+    btnSave.addEventListener("click", async () => {
+      if (!pendingLatLng) return;
+      const name = fName.value.trim(); if (!name) return alert("Name required");
+      const type = fType.value;
+      const links = [];
+      let shabby = "", nice = "";
+      if (type === "apartment") {
+        shabby = document.getElementById("f-shabby").value.trim();
+        nice = document.getElementById("f-nice").value.trim();
+      } else if (type === "office" || type === "motel") {
+        const url = document.getElementById("f-single").value.trim();
+        if (url) links.push({ label: type === "office" ? "Office" : "Album", url });
+      } else {
+        const lbls = Array.from(addModal.querySelectorAll(".ph-label"));
+        const urls = Array.from(addModal.querySelectorAll(".ph-url"));
+        lbls.forEach((lbl, i) => {
+          const url = urls[i]?.value.trim();
+          if (url) links.push({ label: lbl.value || `Album ${i+1}`, url });
+        });
+      }
+      try {
+        await addDoc(markersCol, {
+          name, type, links, shabby, nice,
+          x: pendingLatLng.lng, y: pendingLatLng.lat,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        closeAddModal();
+        toast("Added property");
+      } catch (err) {
+        alert("Add failed: " + err.message);
+      }
+    });
+
+    function openEditModal(entry) {
+      editingEntry = entry;
+      const t = entry.type;
+      const lks = entryLinks(entry);
+      let html = `
+        <div class="row"><label>Name <input id="e-name" type="text" value="${entry.name}"></label></div>
+        <div class="row"><label>Type <select id="e-type">
+          <option value="apartment"${t === "apartment" ? " selected" : ""}>Apartment</option>
+          <option value="office"${t === "office" ? " selected" : ""}>Office</option>
+          <option value="motel"${t === "motel" ? " selected" : ""}>Motel</option>
+          <option value="penthouse"${t === "penthouse" ? " selected" : ""}>Penthouse</option>
+        </select></label></div>
+      `;
+      if (t === "apartment") {
+        html += `
+        <div class="link-row"><label>Shabby</label><input id="e-shabby" type="url" value="${entry.shabby || ""}"></div>
+        <div class="link-row"><label>Nice</label><input id="e-nice" type="url" value="${entry.nice || ""}"></div>
+        `;
+      } else if (t === "office" || t === "motel") {
+        const url = lks[0]?.url || "";
+        html += `<div class="link-row"><label>${t === "office" ? "Office" : "Album"}</label><input id="e-single" type="url" value="${url}"></div>`;
+      } else {
+        lks.forEach((lk, i) => {
+          html += `
+            <div class="grid-2">
+              <input class="pe-label" data-i="${i}" type="text" value="${lk.label}">
+              <input class="pe-url" data-i="${i}" type="url" value="${lk.url}">
+            </div>
+          `;
+        });
+      }
+      html += `<div class="muted">Drag marker in edit mode to reposition</div>`;
+      editBody.innerHTML = html;
+      editModal.classList.add("show");
+    }
+    editCancel.addEventListener("click", () => {
+      editModal.classList.remove("show");
+      editingEntry = null;
+    });
+    editSave.addEventListener("click", async () => {
+      if (!editingEntry) return;
+      const name = document.getElementById("e-name").value.trim();
+      const type = document.getElementById("e-type").value;
+      const links = [];
+      let shabby = "", nice = "";
+      if (type === "apartment") {
+        shabby = document.getElementById("e-shabby").value.trim();
+        nice = document.getElementById("e-nice").value.trim();
+      } else if (type === "office" || type === "motel") {
+        const url = document.getElementById("e-single").value.trim();
+        if (url) links.push({ label: type === "office" ? "Office" : "Album", url });
+      } else {
+        const lbls = Array.from(editModal.querySelectorAll(".pe-label"));
+        const urls = Array.from(editModal.querySelectorAll(".pe-url"));
+        lbls.forEach((lbl, i) => {
+          const url = urls[i]?.value.trim();
+          if (url) links.push({ label: lbl.value || `Album ${i+1}`, url });
+        });
+      }
+      try {
+        await updateDoc(doc(db, "markers", editingEntry.id), {
+          name, type, links, shabby, nice, updatedAt: serverTimestamp()
+        });
+        editModal.classList.remove("show");
+        editingEntry = null;
+      } catch (err) {
+        alert("Save failed: " + err.message);
+      }
+    });
+
+    // ————— Settings / UI Toggles —————
+    settingsBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      settingsMenu.style.display = settingsMenu.style.display === "block" ? "none" : "block";
+    });
+    document.addEventListener("click", () => (settingsMenu.style.display = "none"));
+    menuExport.addEventListener("click", () => {
+      settingsMenu.style.display = "none";
+      const arr = [];
+      markers.forEach(m => {
+        arr.push({
+          name: m.entry.name,
+          x: m.entry.x,
+          y: m.entry.y,
+          type: m.entry.type,
+          links: m.entry.links,
+          shabby: m.entry.shabby,
+          nice: m.entry.nice
+        });
+      });
+      const blob = new Blob([JSON.stringify(arr, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "markers.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+    menuChangelog.addEventListener("click", () => {
+      settingsMenu.style.display = "none";
+      openChangelog();
+    });
+    chgClose.addEventListener("click", () => chgModal.classList.remove("show"));
+    chgCloseX.addEventListener("click", () => chgModal.classList.remove("show"));
+    menuStats.addEventListener("click", () => {
+      settingsMenu.style.display = "none";
+      renderStats();
+      statModal.classList.add("show");
+    });
+    statClose.addEventListener("click", () => statModal.classList.remove("show"));
+    menuToggleAreas.addEventListener("click", () => {
+      settingsMenu.style.display = "none";
+      if (map.hasLayer(areaLabels)) {
+        map.removeLayer(areaLabels);
+        toast("Areas hidden");
+      } else {
+        areaLabels.addTo(map);
+        toast("Areas shown");
+      }
+    });
+
+    unlockBtn.addEventListener("click", async () => {
+      const pass = prompt("Password:");
+      if (pass !== "D8D8D8") return alert("Wrong password");
+      if (!auth.currentUser) {
+        try { await signInAnonymously(auth) } catch {}
+      }
+      setLockedUI(false);
+    });
+    lockBtn.addEventListener("click", async () => {
+      try { await signOut(auth) } catch {}
+      setLockedUI(true);
+    });
+    editModeEl.addEventListener("change", () => updateMarkerDraggability());
+
+    function openChangelog() {
+      chgModal.classList.add("show");
+      if (chgBody.innerHTML.trim() === "") {
+        let html = CHANGELOG.map(line => `<div>${line}</div>`).join("");
+        chgBody.innerHTML = html || "<div>No changes</div>";
+      }
+    }
+
+    function renderStats() {
+      const counts = { total: 0, apartment: 0, penthouse: 0, office: 0, motel: 0 };
+      markers.forEach(m => {
+        counts.total++;
+        const t = m.entry.type.toLowerCase();
+        counts[t] = (counts[t] || 0) + 1;
+        if (m.entry.updatedAt > latestUpdatedAt) latestUpdatedAt = m.entry.updatedAt;
+      });
+      const last = latestUpdatedAt ? new Date(latestUpdatedAt).toLocaleString() : "—";
+      statBody.innerHTML = `
+        <div style="padding:14px">
+          <p><strong>Total:</strong> ${counts.total}</p>
+          <p>Apartments: ${counts.apartment}</p>
+          <p>Penthouses: ${counts.penthouse}</p>
+          <p>Offices: ${counts.office}</p>
+          <p>Motels: ${counts.motel}</p>
+          <hr style="margin:10px 0; border-top:1px solid #c6dec0">
+          <p><strong>Last updated:</strong> ${last}</p>
+        </div>
+      `;
+    }
+
+    // ————— Bootsrap —————
     tryLoadImage();
   </script>
 </body>
