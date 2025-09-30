@@ -1,5 +1,3 @@
-Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation fix for Edit/Delete. No UI/layout changes.
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -8,11 +6,21 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin />
   <style>
+    /* THEME TOKENS */
     :root{
       --main:#93c47d; --secondary:#b6d7a8; --accent:#d9ead3;
-      --sea:#0fa8d2; --ink:#111;
+      --sea:#0fa8d2; --ink:#111; --cardShadow:0 10px 30px rgba(0,0,0,.25);
+      --panelBg:#fff; --panelText:#111; --muted:#333; --border:#ddd; --chip:#eee;
+      --toastBg:rgba(0,0,0,.85); --toastText:#fff;
     }
-    html,body{ height:100%; margin:0; background:var(--sea); }
+    body.dark{
+      --main:#2c6139; --secondary:#2f6b42; --accent:#234c32;
+      --sea:#0b6e8d; --ink:#eaeaea; --cardShadow:0 12px 28px rgba(0,0,0,.6);
+      --panelBg:#1e1e1e; --panelText:#eaeaea; --muted:#b9b9b9; --border:#333; --chip:#2a2a2a;
+      --toastBg:rgba(255,255,255,.09); --toastText:#fff;
+    }
+
+    html,body{ height:100%; margin:0; background:var(--sea); color:var(--panelText); }
     .leaflet-container{ background:var(--sea); }
 
     /* Layout */
@@ -26,7 +34,7 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
     }
     #brand{ display:flex; align-items:center; gap:8px; }
     #brand img{ height:36px; width:auto; display:block; }
-    #toolbar label{ display:flex; align-items:center; gap:6px; }
+    #toolbar label{ display:flex; align-items:center; gap:6px; color:var(--ink); }
     #toolbar input[type="checkbox"]{ transform:translateY(1px); }
     #toolbar button{
       border:none; padding:8px 12px; border-radius:8px; cursor:pointer;
@@ -40,6 +48,7 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
       background:rgba(255,255,255,.9); padding:4px 8px; border-radius:6px; z-index:1200;
       box-shadow:0 2px 6px rgba(0,0,0,.15);
     }
+    body.dark #status{ color:#eaeaea; background:rgba(0,0,0,.5); }
     #version{
       position:fixed; bottom:8px; right:10px; font:12px/1 monospace;
       color:rgba(255,255,255,.92); background:rgba(0,0,0,.6);
@@ -51,15 +60,15 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
     #settingsBtn{ background:#fff; color:#111; }
     #settingsMenu{
       position:absolute; right:0; top:44px; min-width:260px;
-      background:#fff; color:#111; border-radius:10px;
+      background:var(--panelBg); color:var(--panelText); border-radius:10px;
       box-shadow:0 12px 24px rgba(0,0,0,.2);
-      display:none; overflow:hidden; z-index:1400;
+      display:none; overflow:hidden; z-index:1400; border:1px solid var(--border);
     }
     #settingsMenu button{
       display:block; width:100%; text-align:left; padding:10px 12px;
-      border:0; background:transparent; cursor:pointer; color:#111;
+      border:0; background:transparent; cursor:pointer; color:var(--panelText);
     }
-    #settingsMenu button:hover{ background:#f2f2f2; color:#111; }
+    #settingsMenu button:hover{ background:var(--chip); color:var(--panelText); }
 
     /* Modals */
     .modal{ position:fixed; inset:0; display:grid; place-items:center;
@@ -67,32 +76,39 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
     .modal.show{ opacity:1; pointer-events:auto; }
     .card{
       width:min(560px, calc(100vw - 24px)); max-height:85vh; overflow:auto;
-      background:var(--secondary); color:#111; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.25);
+      background:var(--secondary); color:#111; border-radius:12px; box-shadow:var(--cardShadow);
       font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
       transform:translateY(6px); transition:transform .18s ease;
     }
+    body.dark .card{ color:#eaeaea; }
     .modal.show .card{ transform:translateY(0); }
-    .card header{ padding:12px 14px; background:var(--main); border-radius:12px 12px 0 0; font-weight:700; position:relative; }
+    .card header{ padding:12px 14px; background:var(--main); border-radius:12px 12px 0 0; font-weight:700; position:relative; color:var(--ink); }
     .card main{ padding:14px; display:grid; gap:12px; background:var(--accent); }
     .card footer{ padding:12px 14px; background:var(--secondary); border-radius:0 0 12px 12px; display:flex; gap:8px; justify-content:flex-end; }
     .modal .btn{ border:none; padding:8px 12px; border-radius:8px; cursor:pointer; }
     .btn.primary{ background:#111; color:#fff; }
     .btn.ghost{ background:#eee; color:#111; }
+    body.dark .btn.ghost{ background:#2a2a2a; color:#eaeaea; }
     .row{ display:grid; gap:6px; }
     .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-    input[type="text"], input[type="url"], input[type="number"], select{
-      width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:8px; font:14px system-ui; background:#fff; color:#111;
+    input[type="text"], input[type="url"], input[type="password"], select{
+      width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:8px; font:14px system-ui; background:#fff; color:#111;
     }
-    .muted{ color:#333; font-size:12px; }
+    body.dark input[type="text"], body.dark input[type="url"], body.dark input[type="password"], body.dark select{
+      background:#111; color:#eaeaea; border-color:#333;
+    }
+    .muted{ color:var(--muted); font-size:12px; }
     .link-row{ display:grid; grid-template-columns:1fr 2fr; gap:8px; align-items:center; }
 
     /* Popups */
-    .leaflet-popup-content-wrapper{ background:var(--accent); border:2px solid var(--main); border-radius:10px; }
+    .leaflet-popup-content-wrapper{ background:var(--accent); border:2px solid var(--main); border-radius:10px; color:#111; }
     .leaflet-popup-tip{ background:var(--accent); }
+    body.dark .leaflet-popup-content-wrapper{ color:#eaeaea; }
     .popup h3{
       margin:0 0 6px 0; font-size:16px; color:#111;
       background:var(--main); padding:4px 6px; border-radius:6px; display:inline-block;
     }
+    body.dark .popup h3{ color:#fff; }
     .popup p{ margin:0 0 6px; }
     .popup small{ color:#333; display:block; margin-top:6px; }
     .popup a{ color:#003366; font-weight:600; text-decoration:none; border-bottom:1px solid transparent; }
@@ -101,27 +117,57 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
     .area-label{
       background:rgba(255,255,255,.85);
       padding:2px 6px; border-radius:6px; font:12px/1.2 system-ui; color:#111;
-      border:1px solid rgba(0,0,0,.1); white-space:nowrap;
+      border:1px solid rgba(0,0,0,.1); white-space:nowrap; text-shadow:0 1px 0 rgba(255,255,255,.5);
     }
 
-    /* Layers control — top-left under banner, bumped down more */
+    /* Layers control — top-left under banner */
     .leaflet-top.leaflet-left .leaflet-control.layers-toggle { margin:118px 0 0 10px; }
     .leaflet-control.layers-toggle .btn{
       display:flex; align-items:center; gap:6px;
       background:#fff; color:#111; border-radius:8px; padding:8px 10px;
-      font:13px/1.2 system-ui; border:1px solid #ddd;
+      font:13px/1.2 system-ui; border:1px solid var(--border);
       box-shadow:0 2px 6px rgba(0,0,0,.15);
     }
     .leaflet-control.layers-toggle .btn:hover{ background:#f7f7f7; }
     .leaflet-control.layers-toggle .panel{
       position:absolute; left:0; top:40px;
-      background:#fff; color:#111; border-radius:10px; border:1px solid #ddd;
+      background:var(--panelBg); color:var(--panelText); border-radius:10px; border:1px solid var(--border);
       box-shadow:0 12px 24px rgba(0,0,0,.2);
       padding:8px 10px; min-width:180px; display:none;
     }
     .leaflet-control.layers-toggle .panel label{
       display:flex; align-items:center; gap:8px; padding:6px 4px; font:13px/1.2 system-ui;
     }
+
+    /* Float cards: legend + stats (top-right stack) */
+    .float-stack{ position:fixed; top:66px; right:10px; display:grid; gap:10px; z-index:900; }
+    .float-card{
+      background:var(--panelBg); color:var(--panelText); border:1px solid var(--border);
+      border-radius:10px; box-shadow:0 12px 24px rgba(0,0,0,.2); overflow:hidden; min-width:220px;
+    }
+    .float-card header{ padding:8px 10px; background:var(--chip); font-weight:700; display:flex; align-items:center; justify-content:space-between; }
+    .float-card main{ padding:10px; display:grid; gap:8px; }
+    .toggle-btn{ border:0; background:transparent; cursor:pointer; font-size:16px; line-height:1; color:inherit; }
+    .legend-row{ display:flex; align-items:center; gap:8px; font:13px system-ui; }
+    .legend-row img{ width:18px; height:18px; display:block; }
+
+    /* Unlock Modal (inline password) */
+    #unlockModal .card main{ background:var(--panelBg); }
+    #unlockModal .card footer{ background:var(--secondary); }
+
+    /* Toasts */
+    #toasts{ position:fixed; inset:auto 0 16px 0; display:grid; place-items:center; gap:8px; z-index:1600; pointer-events:none; }
+    .toast{
+      background:var(--toastBg); color:var(--toastText); padding:10px 14px; border-radius:10px; font:14px system-ui;
+      box-shadow:0 8px 24px rgba(0,0,0,.25); transform:translateY(20px); opacity:0; transition:.2s ease;
+      pointer-events:auto;
+    }
+    .toast.show{ transform:translateY(0); opacity:1; }
+    .toast.error{ background:#b00020; }
+    .toast.success{ background:#1b5e20; }
+
+    /* Small helper badge for theme toggle */
+    .pill{ padding:6px 10px; border-radius:999px; background:#fff; color:#111; border:1px solid var(--border); cursor:pointer; }
   </style>
 </head>
 <body>
@@ -147,14 +193,73 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
         <button id="menuChangelog"   title="View recent commits">Changelog</button>
         <button id="menuStats"       title="Totals & last updated">Statistics</button>
         <button id="menuToggleAreas" title="Show/hide area names">Toggle area names</button>
+        <button id="menuTheme"       title="Toggle light/dark theme">Toggle theme</button>
+        <button id="menuLegend"      title="Show/hide legend">Toggle legend</button>
+        <button id="menuMiniStats"   title="Show/hide mini-stats">Toggle mini-stats</button>
       </div>
     </div>
   </div>
 
   <div id="map"></div>
 
+  <!-- Float stack: Legend + Mini-stats -->
+  <div class="float-stack">
+    <section id="legendCard" class="float-card" style="display:none">
+      <header>
+        <span>Legend</span>
+        <button class="toggle-btn" data-target="legendCard">–</button>
+      </header>
+      <main>
+        <div class="legend-row"><img src="house-apartment.png" alt=""><span>Apartment</span></div>
+        <div class="legend-row"><img src="house-penthouse.png" alt=""><span>Penthouse</span></div>
+        <div class="legend-row"><img src="house-office.png" alt=""><span>Office</span></div>
+        <div class="legend-row"><img src="house-motel.png" alt=""><span>Motel</span></div>
+      </main>
+    </section>
+
+    <section id="miniStatsCard" class="float-card" style="display:none">
+      <header>
+        <span>Map Stats</span>
+        <button class="toggle-btn" data-target="miniStatsCard">–</button>
+      </header>
+      <main id="miniStatsBody">
+        <div>Total: —</div>
+        <div>Apartments: —</div>
+        <div>Penthouses: —</div>
+        <div>Offices: —</div>
+        <div>Motels: —</div>
+        <hr style="border:none;border-top:1px solid var(--border)">
+        <div>Last updated: —</div>
+      </main>
+    </section>
+  </div>
+
   <div id="status">Loading map…</div>
   <div id="version"></div>
+
+  <!-- Unlock Modal -->
+  <div id="unlockModal" class="modal" aria-hidden="true">
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="unlockTitle">
+      <header id="unlockTitle">Unlock Editing</header>
+      <main>
+        <label class="row">
+          <span>Password</span>
+          <div style="display:flex; gap:8px; align-items:center">
+            <input id="pwInput" type="password" placeholder="Enter password…" autocomplete="current-password" />
+            <button id="pwToggle" class="btn ghost" type="button" title="Show/Hide">👁️</button>
+          </div>
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; font:13px system-ui;">
+          <input id="rememberPw" type="checkbox" /> Remember for this session
+        </label>
+        <div class="muted">Editing requires anonymous sign-in and your Firebase rules to allow writes.</div>
+      </main>
+      <footer>
+        <button id="pwCancel" class="btn ghost" type="button">Cancel</button>
+        <button id="pwSubmit" class="btn primary" type="button">Unlock</button>
+      </footer>
+    </div>
+  </div>
 
   <!-- Add Modal -->
   <div id="addModal" class="modal" aria-hidden="true"><div class="card" role="dialog" aria-modal="true">
@@ -199,6 +304,9 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
     <footer><button id="statClose" class="btn primary">Close</button></footer>
   </div></div>
 
+  <!-- Toasts -->
+  <div id="toasts" aria-live="polite" aria-atomic="true"></div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
 
   <script type="module">
@@ -210,8 +318,8 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ===== Build =====
-    const VERSION = "beta 1.1.8";
-    const VERSION_NOTE = "Fix Edit/Delete: global delegated handler; stable across popup rerenders.";
+    const VERSION = "beta 1.1.9";
+    const VERSION_NOTE = "Unlock modal, mini-stats card, legend card, light/dark theme, toast system.";
     document.getElementById("version").textContent = VERSION;
 
     // ===== Firebase =====
@@ -241,6 +349,7 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
     const hintEl     = document.getElementById("hint");
     const statusEl   = document.getElementById("status");
     const mapEl      = document.getElementById("map");
+    const toastsEl   = document.getElementById("toasts");
 
     const settingsBtn   = document.getElementById("settingsBtn");
     const settingsMenu  = document.getElementById("settingsMenu");
@@ -248,6 +357,9 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
     const menuChangelog = document.getElementById("menuChangelog");
     const menuStats     = document.getElementById("menuStats");
     const menuToggleAreas = document.getElementById("menuToggleAreas");
+    const menuTheme     = document.getElementById("menuTheme");
+    const menuLegend    = document.getElementById("menuLegend");
+    const menuMiniStats = document.getElementById("menuMiniStats");
 
     const chgModal  = document.getElementById("changelogModal");
     const chgBody   = document.getElementById("chgBody");
@@ -271,6 +383,19 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
     const editSave   = document.getElementById("editSave");
     let editingEntry = null;
 
+    // Unlock modal
+    const unlockModal = document.getElementById("unlockModal");
+    const pwInput  = document.getElementById("pwInput");
+    const pwToggle = document.getElementById("pwToggle");
+    const rememberPw = document.getElementById("rememberPw");
+    const pwCancel = document.getElementById("pwCancel");
+    const pwSubmit = document.getElementById("pwSubmit");
+
+    // Float cards
+    const legendCard = document.getElementById("legendCard");
+    const miniStatsCard = document.getElementById("miniStatsCard");
+    const miniStatsBody = document.getElementById("miniStatsBody");
+
     // ===== State =====
     const LOCAL_EDIT_PASSWORD = "D8D8D8";
     const MAP_CANDIDATES = ["map.jpg","map.jpeg","map.png"];
@@ -289,7 +414,19 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
     let zonesOverlay = null;
     const areaLabelsLayer = L.layerGroup();
 
-    const toast = (m)=>{ hintEl.textContent = m; };
+    // ===== Toasts =====
+    function toast(m, type="info", t=1800){
+      const div = document.createElement("div");
+      div.className = "toast " + (type==="error" ? "error" : (type==="success" ? "success" : ""));
+      div.textContent = m;
+      toastsEl.appendChild(div);
+      requestAnimationFrame(()=> div.classList.add("show"));
+      setTimeout(()=> {
+        div.classList.remove("show");
+        setTimeout(()=> div.remove(), 220);
+      }, t);
+    }
+    const hint = (m)=>{ hintEl.textContent = m; };
 
     // ===== Global delegated Edit/Delete (reliable across popup lifecycles) =====
     document.addEventListener('click', async (ev) => {
@@ -306,10 +443,20 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
         openEditModal(entry);
       } else if (action === 'delete') {
         if (!confirm('Delete this marker?')) return;
-        try { await deleteDoc(doc(db, 'markers', id)); toast('Deleted.'); }
-        catch(err){ alert('Failed to delete: ' + (err?.message||err)); }
+        try { await deleteDoc(doc(db, 'markers', id)); toast('Deleted.', "success"); }
+        catch(err){ alert('Failed to delete: ' + (err?.message||err)); toast('Delete failed', "error"); }
       }
     });
+
+    // ===== Theme Toggle =====
+    function toggleTheme(){
+      document.body.classList.toggle("dark");
+      try { localStorage.setItem("theme", document.body.classList.contains("dark") ? "dark" : "light"); } catch {}
+    }
+    try {
+      const pref = localStorage.getItem("theme");
+      if (pref === "dark") document.body.classList.add("dark");
+    } catch {}
 
     // ===== Icons by type =====
     function iconFor(entry, size){
@@ -365,15 +512,14 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
           <small>Coords: x=${entry.x.toFixed(1)}, y=${entry.y.toFixed(1)}</small>
           ${ (unlocked && editModeEl.checked)
               ? '<div style="margin-top:6px;display:flex;gap:8px">' +
-                  `<button class="btn" data-action="edit" data-id="${entry.id}" style="padding:4px 8px;background:#eee;border-radius:6px">Edit</button>` +
-                  `<button class="btn" data-action="delete" data-id="${entry.id}" style="padding:4px 8px;background:#eee;border-radius:6px">Delete</button>` +
+                  `<button class="btn" data-action="edit" data-id="${entry.id}" style="padding:4px 8px;background:var(--chip);border-radius:6px">Edit</button>` +
+                  `<button class="btn" data-action="delete" data-id="${entry.id}" style="padding:4px 8px;background:var(--chip);border-radius:6px">Delete</button>` +
                 '</div>'
               : '' }
         </div>`;
       entry._marker.bindPopup(html, { autoPan:false, keepInView:false });
       entry._marker.on('mousedown', (e)=>{ L.DomEvent.stopPropagation(e); });
       entry._marker.on('click', (e)=>{ L.DomEvent.stopPropagation(e); if (entry._marker.openPopup) entry._marker.openPopup(); });
-      // (no per-popup listeners needed anymore)
     }
 
     function applyEditMode(){
@@ -385,7 +531,7 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
           setMarkerPopup(m);
         }
       });
-      toast(canEdit ? "Edit mode ON" : (unlocked ? "Edit mode OFF" : "Locked (view-only)"));
+      hint(canEdit ? "Edit mode ON" : (unlocked ? "Edit mode OFF" : "Locked (view-only)"));
     }
     function setLockedUI(lock){
       unlocked = !lock;
@@ -395,7 +541,7 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
       document.getElementById("editWrap").style.display  = lock ? "none" : "";
       if (lock) editModeEl.checked = false;
       applyEditMode();
-      toast(lock ? "Locked (view-only)" : "Edit unlocked");
+      hint(lock ? "Locked (view-only)" : "Edit unlocked");
     }
 
     // ===== Map init / Centering =====
@@ -403,7 +549,6 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
       imageWidth = w; imageHeight = h;
       imageBounds = L.latLngBounds([[0,0],[h,w]]);
 
-      // Mount zoom in bottom-left to avoid banner
       map = L.map("map", {
         crs: L.CRS.Simple,
         minZoom: -2,
@@ -415,22 +560,16 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
 
       const imgLayer = L.imageOverlay(imageUrl, imageBounds, { interactive:false }).addTo(map);
 
-      // Show map, size it, fit & center, then nudge down a bit more
       mapEl.style.display = "block";
       requestAnimationFrame(() => {
         map.invalidateSize();
         const targetZoom = map.getBoundsZoom(imageBounds, true);
-        const center = imageBounds.getCenter();
-        map.setView(center, targetZoom, { animate:false });
-        map.panBy([0, 160], { animate:false }); // extra downward pan
+        // Fit with padding so banner doesn't overlap; keeps your banner offset cleanly
+        map.fitBounds(imageBounds, { paddingTopLeft:[0,160], padding:[16,16], maxZoom: targetZoom });
       });
-
-      // Also center once the image is fully ready
       imgLayer.once('load', () => {
         const targetZoom = map.getBoundsZoom(imageBounds, true);
-        const center = imageBounds.getCenter();
-        map.setView(center, targetZoom, { animate:false });
-        map.panBy([0, 160], { animate:false });
+        map.fitBounds(imageBounds, { paddingTopLeft:[0,160], padding:[16,16], maxZoom: targetZoom });
       });
 
       statusEl.textContent = "Image map loaded";
@@ -441,7 +580,7 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
 
       map.on("zoomend", () => {
         const z = map.getZoom();
-        currentIconSize = Math.max(16, Math.min(48, z * 4));
+        currentIconSize = Math.max(18, Math.min(48, Math.round((z+2)*4)));
         markers.forEach(m => { if (m._marker) m._marker.setIcon(iconFor(m)); });
       });
 
@@ -462,6 +601,7 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
     function tryLoadImage(i=0){
       if (i >= MAP_CANDIDATES.length){
         statusEl.textContent = "Could not find map.jpg/jpeg/png next to index.html.";
+        toast("Map image not found", "error");
         return;
       }
       const src = MAP_CANDIDATES[i] + "?v=" + Date.now();
@@ -471,7 +611,7 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
       img.src = src;
     }
 
-    // ===== Layers control (TOP-LEFT under banner) =====
+    // ===== Layers control (TOP-LEFT) =====
     function addLayersControl(){
       document.querySelectorAll('.leaflet-control.layers-toggle').forEach(n => n.remove());
 
@@ -498,12 +638,12 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
             chkOverlay.checked = !!(zonesOverlay && map.hasLayer(zonesOverlay));
             chkOverlay.addEventListener('change', () => {
               if (!zonesOverlay){ toast("No overlay found."); chkOverlay.checked = false; return; }
-              if (chkOverlay.checked){ zonesOverlay.addTo(map); toast("Zones overlay shown"); }
-              else { map.removeLayer(zonesOverlay); toast("Zones overlay hidden"); }
+              if (chkOverlay.checked){ zonesOverlay.addTo(map); hint("Zones overlay shown"); }
+              else { map.removeLayer(zonesOverlay); hint("Zones overlay hidden"); }
             });
             chkAreas.addEventListener('change', () => {
-              if (chkAreas.checked){ areaLabelsLayer.addTo(map); toast("Area names shown"); }
-              else { map.removeLayer(areaLabelsLayer); toast("Area names hidden"); }
+              if (chkAreas.checked){ areaLabelsLayer.addTo(map); hint("Area names shown"); }
+              else { map.removeLayer(areaLabelsLayer); hint("Area names hidden"); }
             });
           }, 0);
           return div;
@@ -579,7 +719,8 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
           const pos = e.target.getLatLng();
           try{
             await updateDoc(doc(db, "markers", m.id), { y: pos.lat, x: pos.lng, updatedAt: serverTimestamp() });
-          }catch(err){ alert("Failed to save position: " + (err?.message||err)); }
+            toast("Position saved", "success");
+          }catch(err){ alert("Failed to save position: " + (err?.message||err)); toast("Save failed", "error"); }
         });
       } else {
         const oldType = (m.type || "apartment").toLowerCase();
@@ -607,8 +748,9 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
         if (!cached.empty){
           cached.forEach(d => pushDoc(d));
           statusEl.textContent = "Loaded " + markers.size + " properties (cache)";
-          hintEl.textContent = "Syncing…";
+          hint("Syncing…");
           map.fire("zoomend");
+          updateMiniStats(); // update stats
         }
       } catch {}
 
@@ -619,8 +761,9 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
           if (!serverSnap.empty){
             serverSnap.forEach(d => pushDoc(d));
             statusEl.textContent = "Loaded " + markers.size + " properties (server)";
-            hintEl.textContent = "Ready";
+            hint("Ready");
             map.fire("zoomend");
+            updateMiniStats();
           }
         } catch(e){ console.warn("[fs] server prefetch:", e?.message||e); }
       }
@@ -638,18 +781,20 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
           if (changed){
             statusEl.textContent = "Loaded " + markers.size + " properties";
             map.fire("zoomend");
+            updateMiniStats();
           }
         },
         error: (err) => {
           console.error("[firestore] onSnapshot error:", err);
           statusEl.textContent = "Firestore error: " + (err?.message || err);
-          hintEl.textContent = "Check Firestore rules / auth";
+          hint("Check Firestore rules / auth");
+          toast("Firestore error", "error");
         }
       });
 
-      // Guard so “Syncing…” doesn’t stick on slow networks
+      // Guard so “Syncing…” doesn’t stick
       let readyFlipped = false;
-      function flipReady(){ if (!readyFlipped){ hintEl.textContent = "Ready"; readyFlipped = true; } }
+      function flipReady(){ if (!readyFlipped){ hint("Ready"); readyFlipped = true; } }
       setTimeout(flipReady, 5000);
     }
 
@@ -684,6 +829,7 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = "markers.json";
       document.body.appendChild(a); a.click(); URL.revokeObjectURL(url); a.remove();
+      toast("Exported markers.json", "success");
     });
 
     document.getElementById("menuChangelog").addEventListener("click", () => { settingsMenu.style.display="none"; openChangelog(); });
@@ -694,17 +840,36 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
 
     document.getElementById("menuToggleAreas").addEventListener("click", () => {
       settingsMenu.style.display = "none";
-      if (map.hasLayer(areaLabelsLayer)) { map.removeLayer(areaLabelsLayer); toast("Area names hidden"); }
-      else { areaLabelsLayer.addTo(map); toast("Area names shown"); }
+      if (map.hasLayer(areaLabelsLayer)) { map.removeLayer(areaLabelsLayer); hint("Area names hidden"); }
+      else { areaLabelsLayer.addTo(map); hint("Area names shown"); }
     });
+    menuTheme.addEventListener("click", () => { settingsMenu.style.display="none"; toggleTheme(); });
+    menuLegend.addEventListener("click", () => { settingsMenu.style.display="none"; toggleCard(legendCard); });
+    menuMiniStats.addEventListener("click", () => { settingsMenu.style.display="none"; toggleCard(miniStatsCard); });
 
-    document.getElementById("unlockBtn").addEventListener("click", async () => {
-      const pass = prompt("Password:"); if (pass !== "D8D8D8"){ alert("Wrong password."); return; }
-      try { if (!auth.currentUser) await signInAnonymously(auth); } catch {}
-      setLockedUI(false);
+    // Inline Unlock modal
+    unlockBtn.addEventListener("click", () => {
+      const remembered = sessionStorage.getItem("pw_ok")==="1";
+      if (remembered) { setLockedUI(false); toast("Unlocked", "success"); return; }
+      unlockModal.classList.add("show");
+      pwInput.value = "";
+      pwInput.type = "password";
+      pwInput.focus();
     });
-    document.getElementById("lockBtn").addEventListener("click", async () => { try { await signOut(auth); } catch{} setLockedUI(true); });
-    document.getElementById("editMode").addEventListener("change", applyEditMode);
+    lockBtn.addEventListener("click", async () => { try { await signOut(auth); } catch{} setLockedUI(true); toast("Locked"); });
+    pwCancel.addEventListener("click", () => unlockModal.classList.remove("show"));
+    pwToggle.addEventListener("click", () => { pwInput.type = (pwInput.type==="password"?"text":"password"); pwInput.focus(); });
+    pwSubmit.addEventListener("click", () => handleUnlock());
+    pwInput.addEventListener("keydown", (e)=>{ if (e.key==="Enter") handleUnlock(); });
+
+    function handleUnlock(){
+      const pass = pwInput.value.trim();
+      if (pass !== LOCAL_EDIT_PASSWORD){ toast("Wrong password", "error"); return; }
+      unlockModal.classList.remove("show");
+      setLockedUI(false);
+      toast("Unlocked", "success");
+      if (rememberPw.checked){ try { sessionStorage.setItem("pw_ok","1"); } catch{} }
+    }
 
     // ===== Changelog & Stats =====
     const REPO_OWNER = "equestrix"; const REPO_NAME  = "Apartment-Map";
@@ -726,7 +891,7 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
             const title = parts.shift() || "Commit"; const body = parts.join("\n").trim();
             const dstr = authorObj?.date || commit.committer?.date || ""; let when="";
             try { when = dstr ? new Date(dstr).toLocaleString() : ""; } catch {}
-            html += `<div class="commit" style="padding:12px 14px; border-bottom:1px solid #eee">
+            html += `<div class="commit" style="padding:12px 14px; border-bottom:1px solid var(--border)">
                       <h4 style="margin:0 0 6px; font-size:14px">${escapeHtml(title)}</h4>
                       ${ body ? `<div class="muted" style="white-space:pre-wrap">${escapeHtml(body)}</div>` : "" }
                       <small class="muted">${escapeHtml(authorName)} — ${escapeHtml(when)}</small>
@@ -737,10 +902,15 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
         })
         .catch(err => { chgBody.innerHTML = `<div style="padding:14px;color:#b00020">Failed to load commits: ${escapeHtml(err.message)}</div>`; });
     }
+
     function formatLastUpdated(ms){ if (!ms) return "—"; try { return new Date(ms).toLocaleString(); } catch{ return "—"; } }
+    function gatherCounts(){
+      const c = { total:0, apartment:0, penthouse:0, office:0, motel:0 };
+      markers.forEach(m => { c.total++; const t=(m.type||"apartment").toLowerCase(); c[t] = (c[t]||0)+1; });
+      return c;
+    }
     function renderStats(){
-      const counts = { total:0, apartment:0, penthouse:0, office:0, motel:0 };
-      markers.forEach(m => { counts.total++; const t=(m.type||"apartment").toLowerCase(); counts[t] = (counts[t]||0)+1; });
+      const counts = gatherCounts();
       const last = formatLastUpdated(latestUpdatedAtMillis);
       statBody.innerHTML =
         `<div style="padding:14px">
@@ -749,10 +919,38 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
           <p>Penthouses: ${counts.penthouse||0}</p>
           <p>Offices: ${counts.office||0}</p>
           <p>Motels: ${counts.motel||0}</p>
-          <hr style="border:none;border-top:1px solid #c6dec0;margin:10px 0">
+          <hr style="border:none;border-top:1px solid var(--border);margin:10px 0">
           <p><strong>Last updated:</strong> ${last}</p>
         </div>`;
     }
+    function updateMiniStats(){
+      if (!miniStatsCard || miniStatsCard.style.display==="none") return;
+      const counts = gatherCounts();
+      const last = formatLastUpdated(latestUpdatedAtMillis);
+      miniStatsBody.innerHTML =
+        `<div>Total: ${counts.total}</div>
+         <div>Apartments: ${counts.apartment||0}</div>
+         <div>Penthouses: ${counts.penthouse||0}</div>
+         <div>Offices: ${counts.office||0}</div>
+         <div>Motels: ${counts.motel||0}</div>
+         <hr style="border:none;border-top:1px solid var(--border)">
+         <div>Last updated: ${last}</div>`;
+    }
+
+    // Float card toggles
+    function toggleCard(el){
+      if (!el) return;
+      const showing = el.style.display !== "none";
+      el.style.display = showing ? "none" : "block";
+      if (!showing && el.id==="miniStatsCard") updateMiniStats();
+    }
+    document.querySelectorAll('.toggle-btn').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        const id = b.getAttribute('data-target');
+        const el = document.getElementById(id);
+        toggleCard(el);
+      });
+    });
 
     // ===== Add / Edit Modals =====
     let pendingLatLng = null;
@@ -796,11 +994,7 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
       coordsNote.textContent = `Will be placed at x=${latlng.lng.toFixed(1)}, y=${latlng.lat.toFixed(1)}.`;
       addModal.classList.add("show");
     }
-    function closeAddModal(){
-      addModal.classList.remove("show");
-      pendingLatLng = null;
-    }
-
+    function closeAddModal(){ addModal.classList.remove("show"); pendingLatLng = null; }
     fType.addEventListener("change", () => renderLinkFields(fType.value, null));
     btnCancel.addEventListener("click", () => closeAddModal());
     btnSave.addEventListener("click", async () => {
@@ -833,10 +1027,11 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
           nice:   (type==="apartment") ? (nice  ||"") : "",
           createdAt: serverTimestamp(), updatedAt: serverTimestamp()
         });
-        closeAddModal(); toast("Property added.");
+        closeAddModal(); toast("Property added.", "success");
       }catch(err){
         console.error("[add] failed:", err);
         alert("Failed to add property: " + (err?.message || err));
+        toast("Add failed", "error");
       }
     });
 
@@ -845,7 +1040,6 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
       editingEntry = entry;
       const lks = entryLinks(entry);
       const t = (entry.type||"apartment").toLowerCase();
-
       let html = `
         <div class="row"><label><span>Name</span>
           <input id="e-name" type="text" value="${(entry.name||"").replace(/"/g,'&quot;')}"></label></div>
@@ -857,7 +1051,6 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
             <option value="penthouse"${t==="penthouse"?" selected":""}>Penthouse</option>
           </select></label></div>
       `;
-
       if (t === "apartment"){
         let shabby = entry.shabby || lks.find(x=>/shabby/i.test(x.label))?.url || "";
         let nice   = entry.nice   || lks.find(x=>/nice/i.test(x.label))?.url   || "";
@@ -869,7 +1062,7 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
         const url = (lks[0]?.url)||"";
         const label = (t==="office")?"Office":"Album";
         html += `<div class="link-row"><label>${label}</label><input id="e-single" type="url" value="${url}"></div>`;
-      } else { // penthouse
+      } else {
         const rows = (lks.length ? lks : [{label:"Album 1",url:""},{label:"Album 2",url:""}])
           .slice(0,8)
           .map((Lk,i)=>`
@@ -879,12 +1072,10 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
             </div>`).join("");
         html += rows;
       }
-
       html += `<div class="muted">Drag the marker to move it while Edit mode is on.</div>`;
       editBody.innerHTML = html;
       editModal.classList.add("show");
     }
-
     editCancel.addEventListener("click", () => { editModal.classList.remove("show"); editingEntry=null; });
     editSave.addEventListener("click", async () => {
       if (!editingEntry) return;
@@ -915,13 +1106,17 @@ Here you go — drop-in index.html (beta 1.1.8) with the global event-delegation
           updatedAt: serverTimestamp()
         });
         editModal.classList.remove("show"); editingEntry=null;
+        toast("Changes saved", "success");
       }catch(err){
         console.error("[edit] failed:", err);
         alert("Failed to save changes: " + (err?.message||err));
+        toast("Save failed", "error");
       }
     });
 
     // ===== Boot =====
+    document.getElementById("menuLegend").click();     // show legend by default (optional)
+    document.getElementById("menuMiniStats").click();  // show mini-stats by default (optional)
     tryLoadImage();
   </script>
 </body>
