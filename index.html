@@ -120,7 +120,7 @@
       border:1px solid rgba(0,0,0,.1); white-space:nowrap; text-shadow:0 1px 0 rgba(255,255,255,.5);
     }
 
-    /* Layers control — top-left under banner */
+    /* Layers control — top-left under banner (you moved this margin already) */
     .leaflet-top.leaflet-left .leaflet-control.layers-toggle { margin:20px 0 0 10px; }
     .leaflet-control.layers-toggle .btn{
       display:flex; align-items:center; gap:6px;
@@ -133,17 +133,17 @@
       position:absolute; left:0; top:40px;
       background:var(--panelBg); color:var(--panelText); border-radius:10px; border:1px solid var(--border);
       box-shadow:0 12px 24px rgba(0,0,0,.2);
-      padding:8px 10px; min-width:180px; display:none;
+      padding:8px 10px; min-width:180px; display:none; max-height:40vh; overflow:auto;
     }
     .leaflet-control.layers-toggle .panel label{
       display:flex; align-items:center; gap:8px; padding:6px 4px; font:13px/1.2 system-ui;
     }
 
     /* Float cards: legend + stats (top-right stack) */
-    .float-stack{ position:fixed; top:80px; right:10px; display:grid; gap:10px; z-index:900; }
+    .float-stack{ position:fixed; top:80px; right:10px; display:grid; gap:10px; z-index:900; pointer-events:none; }
     .float-card{
       background:var(--panelBg); color:var(--panelText); border:1px solid var(--border);
-      border-radius:10px; box-shadow:0 12px 24px rgba(0,0,0,.2); overflow:hidden; min-width:220px;
+      border-radius:10px; box-shadow:0 12px 24px rgba(0,0,0,.2); overflow:hidden; min-width:220px; pointer-events:auto;
     }
     .float-card header{ padding:8px 10px; background:var(--chip); font-weight:700; display:flex; align-items:center; justify-content:space-between; }
     .float-card main{ padding:10px; display:grid; gap:8px; }
@@ -166,11 +166,14 @@
     .toast.error{ background:#b00020; }
     .toast.success{ background:#1b5e20; }
 
-    /* Small helper badge for theme toggle */
-    .pill{ padding:6px 10px; border-radius:999px; background:#fff; color:#111; border:1px solid var(--border); cursor:pointer; }
+    /* Map zoom control lift (keep or adjust later) */
+    .leaflet-bottom.leaflet-left .leaflet-control-zoom{ margin: 0 0 32px 10px; }
+
+    /* EDIT/DELETE visibility controller */
+    body.no-edit .popup-actions{ display:none !important; }
   </style>
 </head>
-<body>
+<body class="no-edit">
   <div id="toolbar">
     <div id="brand">
       <img src="Dynasty8-GTAV-Logo.png" alt="Dynasty 8">
@@ -318,8 +321,8 @@
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ===== Build =====
-    const VERSION = "beta 1.1.94";
-    const VERSION_NOTE = "Unlock modal, mini-stats card, legend card, light/dark theme, toast system.";
+    const VERSION = "beta 1.2.0";
+    const VERSION_NOTE = "Popup actions rendered always; visibility controlled via body.no-edit.";
     document.getElementById("version").textContent = VERSION;
 
     // ===== Firebase =====
@@ -428,7 +431,7 @@
     }
     const hint = (m)=>{ hintEl.textContent = m; };
 
-    // ===== Global delegated Edit/Delete (reliable across popup lifecycles) =====
+    // ===== Global delegated Edit/Delete =====
     document.addEventListener('click', async (ev) => {
       const btn = ev.target.closest('.leaflet-popup .btn[data-action]');
       if (!btn) return;
@@ -502,7 +505,7 @@
       return out;
     }
 
-    // ===== Marker popup / behavior =====
+    // ===== Marker popup / behavior (Always include actions) =====
     function setMarkerPopup(entry){
       const html =
         `<div class="popup">
@@ -510,29 +513,36 @@
           <p><strong>Type:</strong> ${entry.type || "apartment"}</p>
           ${renderLinksHTML(entry)}
           <small>Coords: x=${entry.x.toFixed(1)}, y=${entry.y.toFixed(1)}</small>
-          ${ (unlocked && editModeEl.checked)
-              ? '<div style="margin-top:6px;display:flex;gap:8px">' +
-                  `<button class="btn" data-action="edit" data-id="${entry.id}" style="padding:4px 8px;background:var(--chip);border-radius:6px">Edit</button>` +
-                  `<button class="btn" data-action="delete" data-id="${entry.id}" style="padding:4px 8px;background:var(--chip);border-radius:6px">Delete</button>` +
-                '</div>'
-              : '' }
+          <div class="popup-actions" style="margin-top:6px;display:flex;gap:8px">
+            <button class="btn" data-action="edit" data-id="${entry.id}" style="padding:4px 8px;background:var(--chip);border-radius:6px">Edit</button>
+            <button class="btn" data-action="delete" data-id="${entry.id}" style="padding:4px 8px;background:var(--chip);border-radius:6px">Delete</button>
+          </div>
         </div>`;
-      entry._marker.bindPopup(html, { autoPan:false, keepInView:false });
-      entry._marker.on('mousedown', (e)=>{ L.DomEvent.stopPropagation(e); });
-      entry._marker.on('click', (e)=>{ L.DomEvent.stopPropagation(e); if (entry._marker.openPopup) entry._marker.openPopup(); });
+
+      if (entry._marker.getPopup && entry._marker.getPopup()) {
+        entry._marker.getPopup().setContent(html);
+      } else {
+        entry._marker.bindPopup(html, { autoPan:false, keepInView:false });
+      }
+
+      entry._marker.off('mousedown').on('mousedown', (e)=>{ L.DomEvent.stopPropagation(e); });
+      entry._marker.off('click').on('click', (e)=>{ L.DomEvent.stopPropagation(e); if (entry._marker.openPopup) entry._marker.openPopup(); });
     }
 
     function applyEditMode(){
       const canEdit = unlocked && editModeEl.checked;
+      document.body.classList.toggle('no-edit', !canEdit);
+
       markers.forEach(m => {
         if (m._marker) {
           if (canEdit && m._marker.dragging) m._marker.dragging.enable();
           else if (m._marker.dragging) m._marker.dragging.disable();
-          setMarkerPopup(m);
+          setMarkerPopup(m); // refresh popup HTML for all markers
         }
       });
       hint(canEdit ? "Edit mode ON" : (unlocked ? "Edit mode OFF" : "Locked (view-only)"));
     }
+
     function setLockedUI(lock){
       unlocked = !lock;
       document.getElementById("unlockBtn").style.display = lock ? "" : "none";
@@ -545,26 +555,26 @@
     }
 
     // ===== Map init / Centering =====
+    let imageBounds = null;
     function init(imageUrl, w, h){
-      imageWidth = w; imageHeight = h;
       imageBounds = L.latLngBounds([[0,0],[h,w]]);
 
-      map = L.map("map", {
+      const mapInst = L.map("map", {
         crs: L.CRS.Simple,
         minZoom: -2,
         maxZoom: 5,
         zoomControl: false,
         attributionControl: false
       });
-      L.control.zoom({ position: 'bottomleft' }).addTo(map);
+      map = mapInst;
 
+      L.control.zoom({ position: 'bottomleft' }).addTo(map);
       const imgLayer = L.imageOverlay(imageUrl, imageBounds, { interactive:false }).addTo(map);
 
       mapEl.style.display = "block";
       requestAnimationFrame(() => {
         map.invalidateSize();
         const targetZoom = map.getBoundsZoom(imageBounds, true);
-        // Fit with padding so banner doesn't overlap; keeps your banner offset cleanly
         map.fitBounds(imageBounds, { paddingTopLeft:[0,160], padding:[16,16], maxZoom: targetZoom });
       });
       imgLayer.once('load', () => {
@@ -574,7 +584,6 @@
 
       statusEl.textContent = "Image map loaded";
 
-      // groups
       groups.apartment.addTo(map); groups.penthouse.addTo(map);
       groups.office.addTo(map); groups.motel.addTo(map);
 
@@ -584,16 +593,15 @@
         markers.forEach(m => { if (m._marker) m._marker.setIcon(iconFor(m)); });
       });
 
-      // Add only when unlocked + Add mode checked
       map.on("click", (e) => {
         if (!(unlocked && addModeEl.checked)) return;
         if (document.querySelector("#addModal.show")) return;
         openAddModal(e.latlng);
       });
 
-      addLayersControl();     // top-left “Layers”
-      setLockedUI(true);      // start locked
-      tryLoadOverlay(true);   // overlay ON by default
+      addLayersControl();
+      setLockedUI(true);
+      tryLoadOverlay(true);
       tryLoadAreas();
       wireData();
     }
@@ -660,7 +668,7 @@
     function tryLoadOverlay(defaultOn=false){
       const test = new Image();
       test.onload = () => {
-        const bounds = imageBounds || L.latLngBounds([[0,0],[imageHeight, imageWidth]]);
+        const bounds = imageBounds;
         zonesOverlay = L.imageOverlay("overlay.png?v="+Date.now(), bounds, { opacity:0.85, interactive:false });
         if (defaultOn) {
           zonesOverlay.addTo(map);
@@ -742,7 +750,6 @@
     }
 
     async function wireData(){
-      // Cache first
       try {
         const cached = await getDocsFromCache(markersCol);
         if (!cached.empty){
@@ -750,11 +757,10 @@
           statusEl.textContent = "Loaded " + markers.size + " properties (cache)";
           hint("Syncing…");
           map.fire("zoomend");
-          updateMiniStats(); // update stats
+          updateMiniStats();
         }
       } catch {}
 
-      // Server prefetch if needed
       if (markers.size === 0){
         try {
           const serverSnap = await getDocsFromServer(markersCol);
@@ -768,7 +774,6 @@
         } catch(e){ console.warn("[fs] server prefetch:", e?.message||e); }
       }
 
-      // Live updates
       onSnapshot(markersCol, {
         includeMetadataChanges: true,
         next: (snap) => {
@@ -792,7 +797,6 @@
         }
       });
 
-      // Guard so “Syncing…” doesn’t stick
       let readyFlipped = false;
       function flipReady(){ if (!readyFlipped){ hint("Ready"); readyFlipped = true; } }
       setTimeout(flipReady, 5000);
@@ -937,12 +941,18 @@
          <div>Last updated: ${last}</div>`;
     }
 
-    // Float card toggles
+    // Float card toggles + persistence
     function toggleCard(el){
       if (!el) return;
-      const showing = el.style.display !== "none";
-      el.style.display = showing ? "none" : "block";
-      if (!showing && el.id==="miniStatsCard") updateMiniStats();
+      const show = el.style.display === "none";
+      el.style.display = show ? "block" : "none";
+      if (show && el.id==="miniStatsCard") updateMiniStats();
+      try{
+        const s = JSON.parse(localStorage.getItem('ui_cards')||'{}');
+        if (el.id==="legendCard") s.legend = show;
+        if (el.id==="miniStatsCard") s.mini = show;
+        localStorage.setItem('ui_cards', JSON.stringify(s));
+      }catch{}
     }
     document.querySelectorAll('.toggle-btn').forEach(b=>{
       b.addEventListener('click', ()=>{
@@ -951,6 +961,11 @@
         toggleCard(el);
       });
     });
+    try{
+      const s = JSON.parse(localStorage.getItem('ui_cards')||'{}');
+      if (s.legend!==undefined) legendCard.style.display = s.legend ? 'block' : 'none';
+      if (s.mini!==undefined)   miniStatsCard.style.display = s.mini ? 'block' : 'none';
+    }catch{}
 
     // ===== Add / Edit Modals =====
     let pendingLatLng = null;
@@ -1114,10 +1129,23 @@
       }
     });
 
+    // Shortcuts & modal UX
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      [unlockModal, addModal, editModal, chgModal, statModal].forEach(m => {
+        if (m && m.classList.contains('show')) m.classList.remove('show');
+      });
+    });
+    document.querySelectorAll('.modal').forEach(modal=>{
+      modal.addEventListener('click', (e)=>{
+        if (e.target === modal) modal.classList.remove('show');
+      });
+    });
+
     // ===== Boot =====
-    document.getElementById("menuLegend").click();     // keep legend default ON
-// document.getElementById("menuMiniStats").click();  // default OFF now
-tryLoadImage();
+    document.getElementById("menuLegend").click();     // legend default ON
+    // document.getElementById("menuMiniStats").click(); // mini-stats default OFF
+    tryLoadImage();
 
   </script>
 </body>
