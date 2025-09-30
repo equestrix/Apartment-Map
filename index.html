@@ -321,7 +321,7 @@
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ===== Build =====
-    const VERSION = "beta 1.2.0";
+    const VERSION = "beta 1.2.01";
     const VERSION_NOTE = "Popup actions rendered always; visibility controlled via body.no-edit.";
     document.getElementById("version").textContent = VERSION;
 
@@ -555,7 +555,6 @@
     }
 
     // ===== Map init / Centering =====
-    let imageBounds = null;
     function init(imageUrl, w, h){
       imageBounds = L.latLngBounds([[0,0],[h,w]]);
 
