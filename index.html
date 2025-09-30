@@ -121,7 +121,7 @@
     }
 
     /* Layers control — top-left under banner */
-    .leaflet-top.leaflet-left .leaflet-control.layers-toggle { margin:118px 0 0 10px; }
+    .leaflet-top.leaflet-left .leaflet-control.layers-toggle { margin:72px 0 0 10px; }
     .leaflet-control.layers-toggle .btn{
       display:flex; align-items:center; gap:6px;
       background:#fff; color:#111; border-radius:8px; padding:8px 10px;
@@ -140,7 +140,7 @@
     }
 
     /* Float cards: legend + stats (top-right stack) */
-    .float-stack{ position:fixed; top:66px; right:10px; display:grid; gap:10px; z-index:900; }
+    .float-stack{ position:fixed; top:72px; right:10px; display:grid; gap:10px; z-index:900; }
     .float-card{
       background:var(--panelBg); color:var(--panelText); border:1px solid var(--border);
       border-radius:10px; box-shadow:0 12px 24px rgba(0,0,0,.2); overflow:hidden; min-width:220px;
@@ -318,7 +318,7 @@
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ===== Build =====
-    const VERSION = "beta 1.1.9";
+    const VERSION = "beta 1.1.90";
     const VERSION_NOTE = "Unlock modal, mini-stats card, legend card, light/dark theme, toast system.";
     document.getElementById("version").textContent = VERSION;
 
@@ -1115,9 +1115,10 @@
     });
 
     // ===== Boot =====
-    document.getElementById("menuLegend").click();     // show legend by default (optional)
-    document.getElementById("menuMiniStats").click();  // show mini-stats by default (optional)
-    tryLoadImage();
+    document.getElementById("menuLegend").click();     // keep legend default ON
+// document.getElementById("menuMiniStats").click();  // default OFF now
+tryLoadImage();
+
   </script>
 </body>
 </html>
