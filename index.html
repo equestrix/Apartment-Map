@@ -321,7 +321,7 @@
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ===== Build =====
-    const VERSION = "beta 1.2.02";
+    const VERSION = "beta 1.2.03";
     const VERSION_NOTE = "Fix: popup Edit/Delete wired on popupopen; removed brittle document-level delegation.";
     document.getElementById("version").textContent = VERSION;
 
@@ -385,6 +385,21 @@
     const editCancel = document.getElementById("editCancel");
     const editSave   = document.getElementById("editSave");
     let editingEntry = null;
+
+    // === Mode toggles ===
+addModeEl.addEventListener('change', () => {
+  hint(addModeEl.checked ? 'Add mode ON' : 'Add mode OFF');
+});
+
+editModeEl.addEventListener('change', () => {
+  applyEditMode();              // enable/disable dragging + show/hide popup actions
+  // If a popup is open, refresh its buttons wiring
+  const openPopup = document.querySelector('.leaflet-popup');
+  if (openPopup) {
+    // close/reopen to re-run popupopen wiring
+    map.closePopup();
+  }
+});
 
     // Unlock modal
     const unlockModal = document.getElementById("unlockModal");
@@ -534,19 +549,19 @@
       });
     }
 
-    function applyEditMode(){
-      const canEdit = unlocked && editModeEl.checked;
-      document.body.classList.toggle('no-edit', !canEdit);
-
-      markers.forEach(m => {
-        if (m._marker) {
-          if (canEdit && m._marker.dragging) m._marker.dragging.enable();
-          else if (m._marker.dragging) m._marker.dragging.disable();
-          setMarkerPopup(m); // refresh popup HTML for all markers
-        }
-      });
-      hint(canEdit ? "Edit mode ON" : (unlocked ? "Edit mode OFF" : "Locked (view-only)"));
+   function applyEditMode(){
+  const canEdit = unlocked && editModeEl.checked;
+  console.log('[applyEditMode]', { unlocked, editChecked: editModeEl.checked, canEdit });
+  document.body.classList.toggle('no-edit', !canEdit);
+  markers.forEach(m => {
+    if (m._marker) {
+      if (canEdit && m._marker.dragging) m._marker.dragging.enable();
+      else if (m._marker.dragging) m._marker.dragging.disable();
+      setMarkerPopup(m);
     }
+  });
+  hint(canEdit ? "Edit mode ON" : (unlocked ? "Edit mode OFF" : "Locked (view-only)"));
+}
 
     function setLockedUI(lock){
       unlocked = !lock;
