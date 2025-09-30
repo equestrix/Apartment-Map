@@ -120,7 +120,7 @@
       border:1px solid rgba(0,0,0,.1); white-space:nowrap; text-shadow:0 1px 0 rgba(255,255,255,.5);
     }
 
-    /* Layers control — top-left under banner (you moved this margin already) */
+    /* Layers control */
     .leaflet-top.leaflet-left .leaflet-control.layers-toggle { margin:20px 0 0 10px; }
     .leaflet-control.layers-toggle .btn{
       display:flex; align-items:center; gap:6px;
@@ -166,7 +166,7 @@
     .toast.error{ background:#b00020; }
     .toast.success{ background:#1b5e20; }
 
-    /* Map zoom control lift (keep or adjust later) */
+    /* Map zoom control lift */
     .leaflet-bottom.leaflet-left .leaflet-control-zoom{ margin: 0 0 32px 10px; }
 
     /* EDIT/DELETE visibility controller */
@@ -321,8 +321,8 @@
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ===== Build =====
-    const VERSION = "beta 1.2.01";
-    const VERSION_NOTE = "Popup actions rendered always; visibility controlled via body.no-edit.";
+    const VERSION = "beta 1.2.02";
+    const VERSION_NOTE = "Fix: popup Edit/Delete wired on popupopen; removed brittle document-level delegation.";
     document.getElementById("version").textContent = VERSION;
 
     // ===== Firebase =====
@@ -404,7 +404,6 @@
     const MAP_CANDIDATES = ["map.jpg","map.jpeg","map.png"];
     let unlocked = false;
     let map, currentIconSize = 32;
-    let imageWidth = 0, imageHeight = 0;
     let imageBounds = null;
 
     const groups = {
@@ -430,26 +429,6 @@
       }, t);
     }
     const hint = (m)=>{ hintEl.textContent = m; };
-
-    // ===== Global delegated Edit/Delete =====
-    document.addEventListener('click', async (ev) => {
-      const btn = ev.target.closest('.leaflet-popup .btn[data-action]');
-      if (!btn) return;
-      ev.preventDefault(); ev.stopPropagation();
-
-      const id = btn.getAttribute('data-id');
-      const action = btn.getAttribute('data-action');
-      const entry = id ? markers.get(id) : null;
-      if (!entry) return;
-
-      if (action === 'edit') {
-        openEditModal(entry);
-      } else if (action === 'delete') {
-        if (!confirm('Delete this marker?')) return;
-        try { await deleteDoc(doc(db, 'markers', id)); toast('Deleted.', "success"); }
-        catch(err){ alert('Failed to delete: ' + (err?.message||err)); toast('Delete failed', "error"); }
-      }
-    });
 
     // ===== Theme Toggle =====
     function toggleTheme(){
@@ -525,8 +504,34 @@
         entry._marker.bindPopup(html, { autoPan:false, keepInView:false });
       }
 
+      // Basic pointer behavior
       entry._marker.off('mousedown').on('mousedown', (e)=>{ L.DomEvent.stopPropagation(e); });
       entry._marker.off('click').on('click', (e)=>{ L.DomEvent.stopPropagation(e); if (entry._marker.openPopup) entry._marker.openPopup(); });
+
+      // Wire buttons every time the popup opens (reliable)
+      entry._marker.off('popupopen').on('popupopen', (e) => {
+        const el = e.popup?.getElement?.(); if (!el) return;
+        const canEdit = unlocked && editModeEl.checked;
+
+        const editBtn = el.querySelector('[data-action="edit"]');
+        const delBtn  = el.querySelector('[data-action="delete"]');
+
+        const wire = (btn, fn) => {
+          if (!btn) return;
+          btn.addEventListener('click', (ev) => {
+            ev.preventDefault(); ev.stopPropagation();
+            if (!canEdit) { toast("Enable Edit mode to use this.", "error"); return; }
+            fn();
+          }, { once:true }); // wire fresh each open
+        };
+
+        wire(editBtn, () => openEditModal(entry));
+        wire(delBtn, async () => {
+          if (!confirm('Delete this marker?')) return;
+          try { await deleteDoc(doc(db, 'markers', entry.id)); toast('Deleted.', 'success'); }
+          catch(err){ alert('Failed to delete: ' + (err?.message||err)); toast('Delete failed', 'error'); }
+        });
+      });
     }
 
     function applyEditMode(){
