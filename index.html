@@ -31,7 +31,6 @@
       background:var(--main); color:var(--ink);
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
       z-index:1000; box-shadow:0 2px 8px rgba(0,0,0,.2);
-      display:none; /* hidden until auth passes */
     }
     #brand{ display:flex; align-items:center; gap:8px; }
     #brand img{ height:36px; width:auto; display:block; }
@@ -47,13 +46,13 @@
     #status{
       position:fixed; bottom:8px; left:10px; font:13px/1.3 system-ui; color:#111;
       background:rgba(255,255,255,.9); padding:4px 8px; border-radius:6px; z-index:1200;
-      box-shadow:0 2px 6px rgba(0,0,0,.15); display:none; /* hidden until auth passes */
+      box-shadow:0 2px 6px rgba(0,0,0,.15);
     }
     body.dark #status{ color:#eaeaea; background:rgba(0,0,0,.5); }
     #version{
       position:fixed; bottom:8px; right:10px; font:12px/1 monospace;
       color:rgba(255,255,255,.92); background:rgba(0,0,0,.6);
-      padding:2px 6px; border-radius:4px; z-index:1200; display:none; /* hidden until auth passes */
+      padding:2px 6px; border-radius:4px; z-index:1200;
     }
 
     /* Settings menu */
@@ -140,7 +139,7 @@
       display:flex; align-items:center; gap:8px; padding:6px 4px; font:13px/1.2 system-ui;
     }
 
-    /* Float cards: legend + stats (top-right stack) */
+    /* Float cards */
     .float-stack{ position:fixed; top:80px; right:10px; display:grid; gap:10px; z-index:900; pointer-events:none; }
     .float-card{
       background:var(--panelBg); color:var(--panelText); border:1px solid var(--border);
@@ -172,27 +171,6 @@
 
     /* EDIT/DELETE visibility controller */
     body.no-edit .popup-actions{ display:none !important; }
-
-    /* ===== Auth Gate Overlay ===== */
-    #gate{
-      position:fixed; inset:0; display:grid; place-items:center;
-      background:linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.55));
-      z-index:2000;
-    }
-    #gate .sheet{
-      width:min(560px, calc(100vw - 24px));
-      background:var(--panelBg); color:var(--panelText);
-      border-radius:14px; box-shadow:var(--cardShadow); border:1px solid var(--border);
-      overflow:hidden;
-    }
-    #gate header{ padding:14px 16px; background:var(--main); color:var(--ink); font-weight:800; }
-    #gate main{ padding:16px; display:grid; gap:12px; }
-    #gate footer{ padding:12px 16px; display:flex; gap:8px; justify-content:flex-end; background:var(--accent); }
-    #gate .btn{ border:0; padding:10px 14px; border-radius:10px; cursor:pointer; }
-    #gate .btn.primary{ background:#111; color:#fff; }
-    #gate .btn.ghost{ background:#eee; color:#111; }
-    #gate .error{ color:#b00020; font-weight:700; display:none; }
-    #gate .muted{ color:var(--muted); }
   </style>
 </head>
 <body class="no-edit">
@@ -202,14 +180,14 @@
       <strong>Property Map</strong>
     </div>
 
-    <!-- Hidden until unlocked (still used for edit/drag) -->
+    <!-- Hidden until unlocked -->
     <label id="addWrap" style="display:none" title="Enable click-to-add mode"><input type="checkbox" id="addMode"> Add</label>
     <label id="editWrap" style="display:none" title="Enable drag/edit mode"><input type="checkbox" id="editMode"> Edit</label>
 
     <button id="unlockBtn" title="Enter password to edit">Unlock</button>
     <button id="lockBtn" style="display:none" title="Lock editing">Lock</button>
 
-    <span id="hint">Sign in required…</span>
+    <span id="hint">Auth required…</span>
 
     <div id="settings" style="margin-left:auto">
       <button id="settingsBtn" title="Open settings">⚙️ Settings</button>
@@ -259,7 +237,7 @@
     </section>
   </div>
 
-  <div id="status">Loading map…</div>
+  <div id="status">Loading…</div>
   <div id="version"></div>
 
   <!-- Unlock Modal -->
@@ -277,7 +255,7 @@
         <label style="display:flex; align-items:center; gap:8px; font:13px system-ui;">
           <input id="rememberPw" type="checkbox" /> Remember for this session
         </label>
-        <div class="muted">Editing requires your Firebase rules to allow writes.</div>
+        <div class="muted">Editing requires Google sign-in and your Firestore rules to allow writes.</div>
       </main>
       <footer>
         <button id="pwCancel" class="btn ghost" type="button">Cancel</button>
@@ -332,53 +310,22 @@
   <!-- Toasts -->
   <div id="toasts" aria-live="polite" aria-atomic="true"></div>
 
-  <!-- Auth Gate -->
-  <div id="gate" aria-hidden="false">
-    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
-      <header id="gateTitle">Restricted Access</header>
-      <main>
-        <p><strong>Sign in with Google</strong> to view this map.</p>
-        <p class="muted">Only approved Gmail accounts can access.</p>
-        <p id="gateUser" class="muted" style="display:none"></p>
-        <p id="gateError" class="error">Not authorized for this app.</p>
-      </main>
-      <footer>
-        <button id="btnSwitch" class="btn ghost" style="display:none">Switch account</button>
-        <button id="btnSignin" class="btn primary">Sign in with Google</button>
-      </footer>
-    </div>
-  </div>
-
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
     import {
-      getAuth, onAuthStateChanged, signOut,
-      GoogleAuthProvider, signInWithPopup
+      getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
     import {
-      getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp,
+      getFirestore, collection, onSnapshot, addDoc, doc, getDoc, updateDoc, deleteDoc, serverTimestamp,
       enableIndexedDbPersistence, getDocsFromCache, getDocsFromServer
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
     // ===== Build =====
-    const VERSION = "beta 1.3.0";
-    const VERSION_NOTE = "Auth gate: Google Sign-In required to view. Client allowlist + Firestore rules.";
+    const VERSION = "beta 1.3.1";
+    const VERSION_NOTE = "Google sign-in gate + email allowlist. Anonymous removed.";
     document.getElementById("version").textContent = VERSION;
-
-    // ===== Access Control (client allowlist) =====
-    // Add the Gmail addresses you want to allow here:
-    const ALLOWED_EMAILS = [
-      // "you@gmail.com",
-      // "teammate@gmail.com"
-    ];
-    const allow = (email)=> {
-      if (!email) return false;
-      if (ALLOWED_EMAILS.length === 0) return false; // no one is allowed until you fill this
-      return ALLOWED_EMAILS.map(s=>s.trim().toLowerCase())
-                           .includes(String(email).trim().toLowerCase());
-    };
 
     // ===== Firebase =====
     const firebaseConfig = {
@@ -393,6 +340,7 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
+
     try { await enableIndexedDbPersistence(db); } catch(e){ console.warn("[fs] persistence:", e?.message||e); }
 
     // ===== DOM =====
@@ -406,10 +354,6 @@
     const statusEl   = document.getElementById("status");
     const mapEl      = document.getElementById("map");
     const toastsEl   = document.getElementById("toasts");
-    const toolbarEl  = document.getElementById("toolbar");
-    const versionEl  = document.getElementById("version");
-
-    // Settings
     const settingsBtn   = document.getElementById("settingsBtn");
     const settingsMenu  = document.getElementById("settingsMenu");
     const menuExport    = document.getElementById("menuExport");
@@ -419,7 +363,6 @@
     const menuTheme     = document.getElementById("menuTheme");
     const menuLegend    = document.getElementById("menuLegend");
     const menuMiniStats = document.getElementById("menuMiniStats");
-
     const chgModal  = document.getElementById("changelogModal");
     const chgBody   = document.getElementById("chgBody");
     const chgClose  = document.getElementById("chgClose");
@@ -427,7 +370,6 @@
     const statModal = document.getElementById("statsModal");
     const statBody  = document.getElementById("statBody");
     const statClose = document.getElementById("statClose");
-
     const addModal   = document.getElementById("addModal");
     const fName      = document.getElementById("f-name");
     const fType      = document.getElementById("f-type");
@@ -435,49 +377,56 @@
     const btnCancel  = document.getElementById("btnCancel");
     const btnSave    = document.getElementById("btnSave");
     const coordsNote = document.getElementById("coordsNote");
-
     const editModal  = document.getElementById("editModal");
     const editBody   = document.getElementById("editBody");
     const editCancel = document.getElementById("editCancel");
     const editSave   = document.getElementById("editSave");
     let editingEntry = null;
 
-    // Auth gate elements
-    const gate      = document.getElementById("gate");
-    const gateUser  = document.getElementById("gateUser");
-    const gateError = document.getElementById("gateError");
-    const btnSignin = document.getElementById("btnSignin");
-    const btnSwitch = document.getElementById("btnSwitch");
+    // === Mode toggles ===
+    addModeEl.addEventListener('change', () => {
+      hint(addModeEl.checked ? 'Add mode ON' : 'Add mode OFF');
+    });
+
+    editModeEl.addEventListener('change', () => {
+      applyEditMode();
+      const openPopup = document.querySelector('.leaflet-popup');
+      if (openPopup) { map.closePopup(); }
+    });
+
+    // Unlock modal
+    const unlockModal = document.getElementById("unlockModal");
+    const pwInput  = document.getElementById("pwInput");
+    const pwToggle = document.getElementById("pwToggle");
+    const rememberPw = document.getElementById("rememberPw");
+    const pwCancel = document.getElementById("pwCancel");
+    const pwSubmit = document.getElementById("pwSubmit");
+
+    // Float cards
+    const legendCard = document.getElementById("legendCard");
+    const miniStatsCard = document.getElementById("miniStatsCard");
+    const miniStatsBody = document.getElementById("miniStatsBody");
 
     // ===== State =====
     const LOCAL_EDIT_PASSWORD = "D8D8D8";
     const MAP_CANDIDATES = ["map.jpg","map.jpeg","map.png"];
-    let unlocked = false;
+    let unlocked = false; // local edit toggle
     let map, currentIconSize = 32;
     let imageBounds = null;
-    let appStarted = false;
 
-    const groups = {
-      apartment: L.layerGroup(), penthouse: L.layerGroup(),
-      office: L.layerGroup(), motel: L.layerGroup()
-    };
+    const groups = { apartment: L.layerGroup(), penthouse: L.layerGroup(), office: L.layerGroup(), motel: L.layerGroup() };
     const markers = new Map();
     let latestUpdatedAtMillis = 0;
-
     let zonesOverlay = null;
     const areaLabelsLayer = L.layerGroup();
 
-    // ===== Toasts / Hints =====
+    // ===== Toasts =====
     function toast(m, type="info", t=1800){
       const div = document.createElement("div");
-      div.className = "toast " + (type==="error" ? "error" : (type==="success" ? "success" : ""));
-      div.textContent = m;
+      div.className = "toast " + (type==="error" ? "error" : (type==="success" ? "success" : "")); div.textContent = m;
       toastsEl.appendChild(div);
       requestAnimationFrame(()=> div.classList.add("show"));
-      setTimeout(()=> {
-        div.classList.remove("show");
-        setTimeout(()=> div.remove(), 220);
-      }, t);
+      setTimeout(()=> { div.classList.remove("show"); setTimeout(()=> div.remove(), 220); }, t);
     }
     const hint = (m)=>{ hintEl.textContent = m; };
 
@@ -486,25 +435,17 @@
       document.body.classList.toggle("dark");
       try { localStorage.setItem("theme", document.body.classList.contains("dark") ? "dark" : "light"); } catch {}
     }
-    try {
-      const pref = localStorage.getItem("theme");
-      if (pref === "dark") document.body.classList.add("dark");
-    } catch {}
+    try { const pref = localStorage.getItem("theme"); if (pref === "dark") document.body.classList.add("dark"); } catch {}
 
-    // ===== Icons by type =====
+    // ===== Icons =====
     function iconFor(entry, size){
       const t = (entry.type || "apartment").toLowerCase();
-      const files = {
-        apartment: "house-apartment.png",
-        penthouse: "house-penthouse.png",
-        office:    "house-office.png",
-        motel:     "house-motel.png"
-      };
+      const files = { apartment: "house-apartment.png", penthouse: "house-penthouse.png", office: "house-office.png", motel: "house-motel.png" };
       const s = size || currentIconSize;
       return L.icon({ iconUrl: files[t] || files.apartment, iconSize:[s,s], iconAnchor:[s/2,s/2], tooltipAnchor:[0,-s/2] });
     }
 
-    // ===== Link helpers =====
+    // ===== Links =====
     function entryLinks(entry){
       if (entry?.links?.length) return entry.links;
       const arr = [];
@@ -535,7 +476,7 @@
       return out;
     }
 
-    // ===== Marker popup / behavior =====
+    // ===== Popup / behavior (always render actions; CSS hides when no-edit) =====
     function setMarkerPopup(entry){
       const html =
         `<div class="popup">
@@ -549,11 +490,8 @@
           </div>
         </div>`;
 
-      if (entry._marker.getPopup && entry._marker.getPopup()) {
-        entry._marker.getPopup().setContent(html);
-      } else {
-        entry._marker.bindPopup(html, { autoPan:false, keepInView:false });
-      }
+      if (entry._marker.getPopup && entry._marker.getPopup()) entry._marker.getPopup().setContent(html);
+      else entry._marker.bindPopup(html, { autoPan:false, keepInView:false });
 
       entry._marker.off('mousedown').on('mousedown', (e)=>{ L.DomEvent.stopPropagation(e); });
       entry._marker.off('click').on('click', (e)=>{ L.DomEvent.stopPropagation(e); if (entry._marker.openPopup) entry._marker.openPopup(); });
@@ -607,13 +545,7 @@
     // ===== Map init / Centering =====
     function init(imageUrl, w, h){
       imageBounds = L.latLngBounds([[0,0],[h,w]]);
-      const mapInst = L.map("map", {
-        crs: L.CRS.Simple,
-        minZoom: -2,
-        maxZoom: 5,
-        zoomControl: false,
-        attributionControl: false
-      });
+      const mapInst = L.map("map", { crs: L.CRS.Simple, minZoom: -2, maxZoom: 5, zoomControl: false, attributionControl: false });
       map = mapInst;
 
       L.control.zoom({ position: 'bottomleft' }).addTo(map);
@@ -655,13 +587,13 @@
     }
 
     function tryLoadImage(i=0){
-      const MAP_CANDIDATES = ["map.jpg","map.jpeg","map.png"];
-      if (i >= MAP_CANDIDATES.length){
+      const MAPS = MAP_CANDIDATES;
+      if (i >= MAPS.length){
         statusEl.textContent = "Could not find map.jpg/jpeg/png next to index.html.";
         toast("Map image not found", "error");
         return;
       }
-      const src = MAP_CANDIDATES[i] + "?v=" + Date.now();
+      const src = MAPS[i] + "?v=" + Date.now();
       const img = new Image();
       img.onload = () => init(src, img.naturalWidth, img.naturalHeight);
       img.onerror = () => tryLoadImage(i+1);
@@ -683,7 +615,10 @@
             <label><input type="checkbox" id="chkAreas"> Area names</label>
           `;
           L.DomEvent.disableClickPropagation(div);
-          L.DomEvent.on(btn, 'click', (ev) => { ev.preventDefault(); ev.stopPropagation(); panel.style.display = panel.style.display === 'block' ? 'none' : 'block'; });
+          L.DomEvent.on(btn, 'click', (ev) => {
+            ev.preventDefault(); ev.stopPropagation();
+            panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+          });
           L.DomEvent.on(map.getContainer(), 'click', () => { panel.style.display = 'none'; });
           setTimeout(() => {
             const chkOverlay = panel.querySelector('#chkOverlay');
@@ -702,7 +637,8 @@
           return div;
         }
       });
-      map.addControl(new LayersControl());
+      const ctl = new LayersControl();
+      map.addControl(ctl);
       const tl = map._controlCorners && map._controlCorners['topleft'];
       const el = document.querySelector('.leaflet-control.layers-toggle');
       if (tl && el && el.parentNode !== tl) tl.appendChild(el);
@@ -736,9 +672,7 @@
           const icon = L.divIcon({ className:"area-label", html: a.name, iconSize: null });
           L.marker([a.y, a.x], { icon, interactive:false }).addTo(areaLabelsLayer);
         });
-      } catch (e){
-        console.log("[areas] areas.json not found or invalid (optional)");
-      }
+      } catch (e){ console.log("[areas] areas.json not found or invalid (optional)"); }
     }
 
     // ===== Data (Firestore) =====
@@ -751,6 +685,7 @@
       if (t === "motel")     return groups.motel;
       return groups.apartment;
     }
+
     function createOrUpdateMarker(entry){
       let m = markers.get(entry.id);
       const t = (entry.type || "apartment").toLowerCase();
@@ -787,6 +722,7 @@
       }
       if (m.updatedAt && m.updatedAt > latestUpdatedAtMillis) latestUpdatedAtMillis = m.updatedAt;
     }
+
     function removeMarker(id){
       const m = markers.get(id);
       if (m && m._marker){ layerFor(m.type).removeLayer(m._marker); }
@@ -859,7 +795,7 @@
       return !before || true;
     }
 
-    // ===== Settings & unlock (unchanged UI wiring) =====
+    // ===== Settings & unlock =====
     settingsBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       const open = settingsMenu.style.display === "block";
@@ -895,23 +831,15 @@
     menuLegend.addEventListener("click", () => { settingsMenu.style.display="none"; toggleCard(legendCard); });
     menuMiniStats.addEventListener("click", () => { settingsMenu.style.display="none"; toggleCard(miniStatsCard); });
 
-    // Inline Unlock modal (for editing only)
-    const unlockModal = document.getElementById("unlockModal");
-    const pwInput  = document.getElementById("pwInput");
-    const pwToggle = document.getElementById("pwToggle");
-    const rememberPw = document.getElementById("rememberPw");
-    const pwCancel = document.getElementById("pwCancel");
-    const pwSubmit = document.getElementById("pwSubmit");
-
+    // Inline Unlock modal
     unlockBtn.addEventListener("click", () => {
       const remembered = sessionStorage.getItem("pw_ok")==="1";
       if (remembered) { setLockedUI(false); toast("Unlocked", "success"); return; }
       unlockModal.classList.add("show");
-      pwInput.value = "";
-      pwInput.type = "password";
-      pwInput.focus();
+      pwInput.value = ""; pwInput.type = "password"; pwInput.focus();
     });
-    lockBtn.addEventListener("click", async () => { setLockedUI(true); toast("Locked"); });
+    // Lock just disables edit; does NOT sign out anymore
+    lockBtn.addEventListener("click", () => { setLockedUI(true); toast("Locked"); });
     pwCancel.addEventListener("click", () => unlockModal.classList.remove("show"));
     pwToggle.addEventListener("click", () => { pwInput.type = (pwInput.type==="password"?"text":"password"); pwInput.focus(); });
     pwSubmit.addEventListener("click", () => handleUnlock());
@@ -926,7 +854,7 @@
       if (rememberPw.checked){ try { sessionStorage.setItem("pw_ok","1"); } catch{} }
     }
 
-    // ===== Changelog & Stats (unchanged) =====
+    // ===== Changelog & Stats =====
     const REPO_OWNER = "equestrix"; const REPO_NAME  = "Apartment-Map";
     function escapeHtml(s){ const map={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}; return String(s).replace(/[&<>"]/g,c=>map[c]); }
     function openChangelog(){
@@ -992,6 +920,7 @@
          <div>Last updated: ${last}</div>`;
     }
 
+    // Float card toggles + persistence
     function toggleCard(el){
       if (!el) return;
       const show = el.style.display === "none";
@@ -1034,7 +963,7 @@
         const url = (entry?.links?.[0]?.url) || "";
         const label = (t === "office") ? "Office" : "Album";
         html = `<div class="link-row"><label>${label}</label><input id="f-single" type="url" placeholder="https://imgur.com/a/..." value="${url}"></div>`;
-      } else {
+      } else { // penthouse
         const links = Array.isArray(entry?.links) ? entry.links : [];
         const count = Math.max(links.length, 2);
         let rows = "";
@@ -1068,6 +997,7 @@
       const name = (fName.value||"").trim();
       const type = fType.value;
       if (!name){ alert("Name is required."); return; }
+
       let links = [], shabby="", nice="";
       if (type === "apartment"){
         shabby = document.getElementById("f-shabby").value.trim();
@@ -1083,6 +1013,7 @@
           if (url) links.push({ label: label||("Album "+(i+1)), url });
         }
       }
+
       try{
         await addDoc(collection(db,"markers"), {
           name, type, links, x: lng, y: lat,
@@ -1144,6 +1075,7 @@
       if (!editingEntry) return;
       const name = (document.getElementById("e-name").value||"").trim();
       const type = (document.getElementById("e-type").value||"apartment").toLowerCase();
+
       let links = [], shabby="", nice="";
       if (type === "apartment"){
         shabby = (document.getElementById("e-shabby").value||"").trim();
@@ -1159,6 +1091,7 @@
           if (url) links.push({ label: label||("Album "+(i+1)), url });
         }
       }
+
       try{
         await updateDoc(doc(db,"markers",editingEntry.id),{
           name, type, links,
@@ -1183,100 +1116,77 @@
       });
     });
     document.querySelectorAll('.modal').forEach(modal=>{
-      modal.addEventListener('click', (e)=>{
-        if (e.target === modal) modal.classList.remove('show');
-      });
+      modal.addEventListener('click', (e)=>{ if (e.target === modal) modal.classList.remove('show'); });
     });
 
-    // ===== Mode toggles =====
-    addModeEl.addEventListener('change', () => {
-      hint(addModeEl.checked ? 'Add mode ON' : 'Add mode OFF');
-    });
-    editModeEl.addEventListener('change', () => {
-      applyEditMode();
-      const openPopup = document.querySelector('.leaflet-popup');
-      if (openPopup) map.closePopup();
-    });
-
-    // ===== Auth Gate logic =====
+    // ======= AUTH GATE (Google + allowlist) =======
+    const gate = document.createElement('div');
+    gate.style.cssText = "position:fixed;inset:56px 0 0 0;display:grid;place-items:center;background:var(--sea);z-index:2000;";
+    gate.innerHTML = `
+      <div style="background:var(--panelBg);color:var(--panelText);padding:18px 20px;border-radius:12px;border:1px solid var(--border);box-shadow:0 12px 24px rgba(0,0,0,.2);text-align:center;max-width:420px">
+        <h3 style="margin:0 0 8px">Sign in to view</h3>
+        <p style="margin:0 0 12px;font:14px system-ui">Only allowlisted Google accounts can access this map.</p>
+        <button id="btnGoogle" class="btn primary">Continue with Google</button>
+        <div style="margin-top:10px">
+          <button id="btnSignOut" class="btn ghost" style="display:none">Sign out</button>
+        </div>
+        <div id="gateMsg" class="muted" style="margin-top:10px"></div>
+      </div>`;
+    document.body.appendChild(gate);
+    const gateMsg = gate.querySelector('#gateMsg');
+    const btnGoogle = gate.querySelector('#btnGoogle');
+    const btnSignOut = gate.querySelector('#btnSignOut');
     const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: "select_account" });
-
-    btnSignin.addEventListener('click', async () => {
-      try {
-        await signInWithPopup(auth, provider);
-        // onAuthStateChanged will handle the rest
-      } catch (e){
-        console.warn("[auth] signIn:", e?.message||e);
-        gateError.textContent = e?.message || "Sign-in failed.";
-        gateError.style.display = 'block';
-      }
-    });
-
-    btnSwitch.addEventListener('click', async () => {
-      try { await signOut(auth); } catch {}
-      gateError.style.display = 'none';
-      gateUser.style.display  = 'none';
-      // Immediately show popup again for convenience
-      try { await signInWithPopup(auth, provider); } catch {}
-    });
-
-    function showGate(msg = "", email = ""){
-      gate.style.display = 'grid';
-      toolbarEl.style.display = 'none';
-      statusEl.style.display = 'none';
-      versionEl.style.display = 'none';
-      mapEl.style.display = 'none';
-      if (msg){
-        gateError.textContent = msg;
-        gateError.style.display = 'block';
-      } else {
-        gateError.style.display = 'none';
-      }
-      if (email){
-        gateUser.textContent = `Signed in as ${email}`;
-        gateUser.style.display = 'block';
-        btnSwitch.style.display = 'inline-block';
-      } else {
-        gateUser.style.display = 'none';
-        btnSwitch.style.display = 'none';
-      }
-    }
-
-    function hideGate(){
-      gate.style.display = 'none';
-      toolbarEl.style.display = '';
-      statusEl.style.display = '';
-      versionEl.style.display = '';
+    function showGate(msg){ gate.style.display = 'grid'; gateMsg.textContent = msg || ''; }
+    function hideGate(){ gate.style.display = 'none'; }
+    let booted = false;
+    function startAppOnce(){
+      if (booted) return; booted = true;
+      document.getElementById("menuLegend").click(); // legend default ON
+      tryLoadImage();
     }
 
     onAuthStateChanged(auth, async (user) => {
-      if (!user){
-        showGate("", "");
-        hint("Sign in required");
+      if (!user) {
+        showGate('');
+        btnGoogle.style.display = '';
+        btnSignOut.style.display = 'none';
+        hint('Please sign in'); statusEl.textContent = 'Auth required';
         return;
       }
-      const email = user.email || "";
-      if (!allow(email)){
-        showGate("Not authorized for this app.", email);
-        hint("Access denied");
-        return;
-      }
-      // Authorized:
-      hideGate();
-      hint("Loading…");
-      if (!appStarted){
-        appStarted = true;
-        tryLoadImage();
+      btnGoogle.style.display = 'none';
+      btnSignOut.style.display = '';
+      gateMsg.textContent = 'Checking access…';
+
+      try {
+        const email = (user.email || '').toLowerCase(); // keep your allowlist doc IDs lowercased
+        if (!email) throw new Error("No email on token");
+        const snap = await getDoc(doc(db, 'allowlist', email));
+        if (snap.exists()) {
+          hideGate();
+          hint('Signed in'); statusEl.textContent = 'Signed in';
+          startAppOnce();
+        } else {
+          showGate('This Google account is not allowlisted.');
+        }
+      } catch (e) {
+        console.error(e);
+        showGate('Failed to verify access. Try again or contact the owner.');
       }
     });
 
-    // Optionally: if you want a silent auto-popup on first load
-    // (User can still click the button)
-    // setTimeout(()=> { if (!auth.currentUser) btnSignin.click(); }, 200);
+    btnGoogle.addEventListener('click', async () => {
+      try { await signInWithPopup(auth, provider); }
+      catch (e){ gateMsg.textContent = e.message || 'Sign-in failed.'; }
+    });
+    btnSignOut.addEventListener('click', async () => {
+      try { await signOut(auth); showGate('Signed out.'); }
+      catch (e){ gateMsg.textContent = e.message || 'Sign-out failed.'; }
+    });
 
-    // Pre-open Legend on first auth load
-    document.getElementById("menuLegend").click();
+    // ===== Boot is now deferred until allowlist passes =====
+    // (no tryLoadImage() call here)
+
   </script>
 </body>
 </html>
